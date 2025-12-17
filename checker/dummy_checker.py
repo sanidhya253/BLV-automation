@@ -1,6 +1,6 @@
 # checker/dummy_checker.py
-print("CI/CD pipeline working")
+print("CI/CD pipeline working but forcing to fail")
 #
 import sys
-sys.exit(0)
+sys.exit(1)
 
