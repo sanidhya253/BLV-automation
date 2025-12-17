@@ -1,6 +1,6 @@
 # checker/dummy_checker.py
-print("CI/CD pipeline working — but now we force a failure for demo")
+print("CI/CD pipeline working")
 # exit 1 means failure
 import sys
-sys.exit(1)
+sys.exit(0)
 
