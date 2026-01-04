@@ -43,24 +43,28 @@ def success(rule_id):
 # ================= JUICE SHOP SETUP FUNCTIONS =================
 
 def login():
-    """Login to get authenticated session (optional but helps with basket)"""
-    payload = {"email": "demo@juice-sh.op", "password": "demo"}  # Known demo account
+    """Login with known account - admin works in fresh Juice Shop"""
+    payload = {"email": "admin@juice-sh.op", "password": "admin123"}
     r = SESSION.post(urljoin(TARGET, "/rest/user/login"), json=payload)
     if r.status_code == 200:
-        print("   [Setup] Logged in as demo user")
+        print("   [Setup] Logged in as admin successfully")
+        return True
     else:
-        print("   [Setup] Login failed, continuing as guest...")
+        print(f"   [Setup] Login failed: {r.status_code} {r.text}")
+        return False
 
 def get_basket():
     global BASKET_ID
-    r = SESSION.get(urljoin(TARGET, "/api/Basket"))
+    r = SESSION.get(urljoin(TARGET, "/api/Basket/"))  # Note the trailing slash
     if r.status_code == 200:
         data = r.json()
-        BASKET_ID = data.get("id")
+        BASKET_ID = data.get("id") or data.get("BasketId")
         if BASKET_ID:
-            print(f"   [Setup] Found basket ID: {BASKET_ID}")
+            print(f"   [Setup] Basket ID retrieved: {BASKET_ID}")
             return True
-    print("   [Setup] Failed to get basket")
+        else:
+            print("   [Setup] No basket ID in response")
+    print(f"   [Setup] Failed to get basket: {r.status_code} {r.text}")
     return False
 
 def add_product_to_basket():
@@ -275,3 +279,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
