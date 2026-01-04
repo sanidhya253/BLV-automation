@@ -42,14 +42,29 @@ def success(rule_id):
 
 # ================= JUICE SHOP SETUP =================
 
-def login():
-    payload = {"email": "admin@juice-sh.op", "password": "admin123"}
-    r = SESSION.post(urljoin(TARGET, "/rest/user/login"), json=payload)
-    if r.status_code == 200:
-        print("   [Setup] Logged in as admin")
-        return True
-    print(f"   [Setup] Login failed: {r.status_code}")
-    return False
+def login_juice_shop():
+    login_payload = {
+        "email": "test@test.com",
+        "password": "test123"
+    }
+
+    SESSION.post(
+        urljoin(TARGET, "/rest/user/login"),
+        json=login_payload,
+        headers=HEADERS
+    )
+
+def add_product():
+    payload = {
+        "ProductId": 1,
+        "quantity": 1
+    }
+
+    SESSION.post(
+        urljoin(TARGET, "/api/BasketItems/"),
+        json=payload,
+        headers=HEADERS
+    )
 
 def get_basket():
     global BASKET_ID
@@ -61,20 +76,6 @@ def get_basket():
             print(f"   [Setup] Basket ID: {BASKET_ID}")
             return True
     print(f"   [Setup] Get basket failed: {r.status_code}")
-    return False
-
-def add_product_to_basket():
-    global BASKET_ITEM_ID
-    if not BASKET_ID:
-        return False
-    payload = {"ProductId": PRODUCT_ID, "BasketId": BASKET_ID, "quantity": 1}
-    r = SESSION.post(urljoin(TARGET, "/api/BasketItems/"), json=payload, headers=HEADERS)
-    if r.status_code == 201:
-        data = r.json()
-        BASKET_ITEM_ID = data["id"]
-        print(f"   [Setup] Added item → Item ID: {BASKET_ITEM_ID}")
-        return True
-    print(f"   [Setup] Add item failed: {r.status_code}")
     return False
 
 # ================= VALIDATORS =================
@@ -89,19 +90,25 @@ def validate_price_integrity(rule):
         success(rule["rule_id"])
 
 def validate_negative_quantity(rule):
-    endpoint = "/api/BasketItems/"
+    login_juice_shop()
+    add_product()
+
     payload = {
         "ProductId": 1,
-        "BasketId": 1,
         "quantity": -5
     }
 
-    r = SESSION.post(urljoin(TARGET, endpoint), json=payload, headers=HEADERS)
+    r = SESSION.post(
+        urljoin(TARGET, "/api/BasketItems/"),
+        json=payload,
+        headers=HEADERS
+    )
 
     if r.status_code in [200, 201]:
-        fail(rule["rule_id"], "Negative quantity accepted by e-commerce application")
+        fail(rule["rule_id"], "Negative quantity accepted (real BLV triggered)")
     else:
         success(rule["rule_id"])
+
 
 def validate_quantity_overflow(rule):
     print("   Testing excessive quantity...")
@@ -250,4 +257,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
