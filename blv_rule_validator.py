@@ -44,38 +44,33 @@ def load_rules():
 # OWASP JUICE SHOP STATE SETUP
 # =========================================================
 def login_juice_shop():
-    """Register (if needed) and login user to establish session"""
-
+    """Register (if needed) and login. Store token if returned."""
     register_payload = {
         "email": "blvtest@juice.shop",
         "password": "Test@1234",
         "passwordRepeat": "Test@1234",
-        "securityQuestion": {
-            "id": 1,
-            "answer": "test"
-        }
+        "securityQuestion": {"id": 1, "answer": "test"}
     }
 
-    # Attempt registration (ignore failure if already exists)
-    SESSION.post(
-        urljoin(TARGET, "/api/Users/"),
-        json=register_payload,
-        headers=HEADERS
-    )
+    SESSION.post(urljoin(TARGET, "/api/Users/"), json=register_payload, headers=HEADERS)
 
-    login_payload = {
-        "email": "blvtest@juice.shop",
-        "password": "Test@1234"
-    }
+    login_payload = {"email": "blvtest@juice.shop", "password": "Test@1234"}
+    r = SESSION.post(urljoin(TARGET, "/rest/user/login"), json=login_payload, headers=HEADERS)
 
-    r = SESSION.post(
-        urljoin(TARGET, "/rest/user/login"),
-        json=login_payload,
-        headers=HEADERS
-    )
+    if r.status_code != 200:
+        print(f"   [debug] login status={r.status_code} body={r.text[:200]}")
+        return False
 
-    return r.status_code == 200
-
+    try:
+        data = r.json()
+        token = data.get("authentication", {}).get("token")
+        if token:
+            # Use Bearer token for endpoints that require it
+            SESSION.headers.update({"Authorization": f"Bearer {token}"})
+        return True
+    except Exception:
+        print(f"   [debug] login json parse failed body={r.text[:200]}")
+        return False
 
 def add_product_to_basket(quantity=1):
     payload = {
@@ -100,18 +95,41 @@ def validate_negative_quantity(rule):
     print("   Testing negative quantity...")
 
     if not login_juice_shop():
-        fail(rule["rule_id"], "Login failed")
+        fail(rule["rule_id"], "Login failed (cannot create state)")
         return
 
-    add_product_to_basket()
+    # Create a normal basket item first
+    r_ok = add_product_to_basket(quantity=1)
 
-    r = add_product_to_basket(quantity=-5)
+    # Now attempt negative quantity
+    r_bad = add_product_to_basket(quantity=-5)
 
-    if r.status_code in [200, 201]:
-        fail(rule["rule_id"], "Negative quantity accepted (real BLV)")
-    else:
-        success(rule["rule_id"])
+    # Debug prints so you can see what CI gets (helps your report too)
+    print(f"   [debug] normal add status={r_ok.status_code}")
+    print(f"   [debug] negative add status={r_bad.status_code}")
 
+    # If the API accepted the request, check whether it actually stored negative quantity
+    try:
+        body = r_bad.json()
+    except Exception:
+        body = None
+
+    # Juice Shop commonly returns created/updated BasketItem JSON on success
+    if r_bad.status_code in [200, 201]:
+        if isinstance(body, dict) and body.get("quantity", None) is not None and body.get("quantity") < 1:
+            fail(rule["rule_id"], f"Negative quantity persisted (quantity={body.get('quantity')})")
+            return
+
+        # Even if body isn't clear, treat 200/201 as suspicious for this rule
+        fail(rule["rule_id"], "Negative quantity request was accepted (200/201)")
+        return
+
+    # If rejected properly (400/401/403/422 etc.), rule passes
+    success(rule["rule_id"])
+
+def add_product_to_basket(quantity=1):
+    payload = {"ProductId": 1, "quantity": quantity}
+    return SESSION.post(urljoin(TARGET, "/api/BasketItems/"), json=payload, headers=HEADERS)
 
 def validate_quantity_overflow(rule):
     print("   Testing excessive quantity...")
@@ -219,3 +237,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
