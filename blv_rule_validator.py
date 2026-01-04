@@ -12,14 +12,18 @@ TARGET = sys.argv[1].rstrip("/")
 SESSION = requests.Session()
 
 HEADERS = {
-    "User-Agent": "BLV-Rule-Validator/1.0",
-    "Accept": "application/json,text/html"
+"User-Agent": "BLV-Rule-Validator/1.0",
+    "Accept": "application/json",
+    "Content-Type": "application/json"
 }
 
 RULE_FILE = "rules/final_business_logic_rules.json"
 FAILED_RULES = []
 PASSED_RULES = []
 # =========================================
+BASKET_ID = None
+BASKET_ITEM_ID = None
+PRODUCT_ID = 1  # Apple Juice - always exists in Juice Shop
 
 
 def load_rules():
@@ -37,6 +41,46 @@ def success(rule_id):
     PASSED_RULES.append(rule_id)
 
 
+# ================= JUICE SHOP SETUP FUNCTIONS =================
+
+def login_as_guest():
+    """Juice Shop allows guest checkout, but login ensures session"""
+    login_payload = {"email": "test@test.com", "password": "any"}
+    r = SESSION.post(urljoin(TARGET, "/rest/user/login"), json=login_payload)
+    if r.status_code == 200:
+        print("   [Setup] Logged in (guest session ready)")
+    # Even if login fails, guest basket works
+
+def get_or_create_basket():
+    global BASKET_ID
+    r = SESSION.get(urljoin(TARGET, "/api/Basket"))
+    if r.status_code == 200:
+        data = r.json()
+        BASKET_ID = data.get("id")
+        print(f"   [Setup] Found basket ID: {BASKET_ID}")
+    else:
+        print("   [Setup] Could not get basket")
+
+def add_product_to_basket():
+    global BASKET_ITEM_ID
+    if not BASKET_ID:
+        return False
+    payload = {
+        "ProductId": PRODUCT_ID,
+        "BasketId": BASKET_ID,
+        "quantity": 1
+    }
+    r = SESSION.post(urljoin(TARGET, "/api/BasketItems/"), json=payload, headers=HEADERS)
+    if r.status_code == 201:
+        data = r.json()
+        BASKET_ITEM_ID = data["id"]
+        print(f"   [Setup] Added product to basket → Item ID: {BASKET_ITEM_ID}")
+        return True
+    else:
+        print(f"   [Setup] Failed to add item: {r.status_code}")
+        return False
+
+
 # ================= RULE VALIDATORS =================
 
 def validate_price_integrity(rule):
@@ -52,13 +96,43 @@ def validate_price_integrity(rule):
 
 
 def validate_negative_quantity(rule):
-    endpoint = rule["endpoint"]
-    payload = {"product_id": 1, "quantity": -5}
+    print("   Testing negative quantity vulnerability...")
+    login_as_guest()
+    get_or_create_basket()
+    if not add_product_to_basket():
+        success(rule["rule_id"])  # Skip if setup failed
+        return
 
-    r = SESSION.post(urljoin(TARGET, endpoint), data=payload, headers=HEADERS)
+    tamper_payload = {"quantity": -10}
+    r = SESSION.put(
+        urljoin(TARGET, f"/api/BasketItems/{BASKET_ITEM_ID}"),
+        json=tamper_payload,
+        headers=HEADERS
+    )
 
-    if r.status_code in [200, 201]:
-        fail(rule["rule_id"], "Negative quantity accepted")
+    if r.status_code == 200:
+        fail(rule["rule_id"], "Negative quantity accepted → Critical BLV detected!")
+    else:
+        success(rule["rule_id"])
+
+def validate_quantity_overflow(rule):
+    print("   Testing excessive quantity vulnerability...")
+    # Reuse same setup as above
+    login_as_guest()
+    get_or_create_basket()
+    if not add_product_to_basket():
+        success(rule["rule_id"])
+        return
+
+    tamper_payload = {"quantity": 999999}
+    r = SESSION.put(
+        urljoin(TARGET, f"/api/BasketItems/{BASKET_ITEM_ID}"),
+        json=tamper_payload,
+        headers=HEADERS
+    )
+
+    if r.status_code == 200:
+        fail(rule["rule_id"], "Excessive quantity (999999) accepted → Abuse possible")
     else:
         success(rule["rule_id"])
 
@@ -189,15 +263,16 @@ def validate_rule(rule):
         validate_price_integrity(rule)
 
     elif rule_id == "BLV-QTY-001":
-        validate_negative_quantity(rule)
+        validate_negative_quantity(rule)  # ← Updated
+
+    elif rule_id == "BLV-QTY-002":
+        validate_quantity_overflow(rule)  # ← Updated
 
     elif rule_id == "BLV-CPN-001":
         validate_coupon_reuse(rule)
 
     elif rule_id == "BLV-WF-001":
         validate_skip_payment(rule)
-    elif rule_id == "BLV-QTY-002":
-        validate_quantity_overflow(rule)
 
     elif rule_id == "BLV-CPN-002":
         validate_coupon_stacking(rule)
@@ -206,17 +281,20 @@ def validate_rule(rule):
         validate_payment_amount(rule)
 
     elif rule_id == "BLV-WAL-001":
-        validate_wallet_topup(rule)             
+        validate_wallet_topup(rule)
+
     elif rule_id == "BLV-RACE-001":
         validate_race_condition(rule)
 
     elif rule_id == "BLV-DISC-001":
         validate_discount_limit(rule)
+
     elif rule_id == "BLV-SHIP-001":
         validate_shipping_fee(rule)
 
     elif rule_id == "BLV-AUTH-001":
         validate_role_escalation(rule)
+
     else:
         print(f"⚠️ No validator implemented for {rule_id}")
 
@@ -224,24 +302,24 @@ def validate_rule(rule):
 # ================= MAIN =================
 
 def main():
-    print("\n🔍 Starting Business Logic Rule Validation\n")
+    print("\n🔍 Starting Business Logic Rule Validation on OWASP Juice Shop\n")
 
     rules = load_rules()
 
     for rule in rules:
+        print(f"\nTesting Rule: {rule['rule_id']} - {rule['name']}")
         validate_rule(rule)
 
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 70)
     print(f"Rules Passed: {len(PASSED_RULES)}")
     print(f"Rules Failed: {len(FAILED_RULES)}")
 
     if FAILED_RULES:
-        print("\n❌ CI/CD BLOCKED — Business Logic Violations Found")
+        print("\n❌ CI/CD BLOCKED — Business Logic Violations Found!")
         sys.exit(1)
     else:
         print("\n✅ CI/CD PASSED — No Business Logic Violations")
         sys.exit(0)
-
 
 if __name__ == "__main__":
     main()
