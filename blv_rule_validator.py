@@ -21,10 +21,10 @@ RULE_FILE = "rules/final_business_logic_rules.json"
 FAILED_RULES = []
 PASSED_RULES = []
 
-# Global variables
+# Global variables for Juice Shop
 BASKET_ID = None
 BASKET_ITEM_ID = None
-PRODUCT_ID = 1  # Apple Juice (always exists)
+PRODUCT_ID = 1  # Apple Juice
 
 # =========================================
 
@@ -40,28 +40,27 @@ def success(rule_id):
     print(f"✅ RULE PASSED → {rule_id}")
     PASSED_RULES.append(rule_id)
 
-# ================= SETUP =================
+# ================= JUICE SHOP SETUP =================
 
 def login():
     payload = {"email": "admin@juice-sh.op", "password": "admin123"}
     r = SESSION.post(urljoin(TARGET, "/rest/user/login"), json=payload)
     if r.status_code == 200:
-        print("   [Setup] Logged in as admin successfully")
+        print("   [Setup] Logged in as admin")
         return True
-    else:
-        print(f"   [Setup] Login failed: {r.status_code} {r.text}")
-        return False
+    print(f"   [Setup] Login failed: {r.status_code}")
+    return False
 
 def get_basket():
     global BASKET_ID
-    r = SESSION.get(urljoin(TARGET, "/api/Basket/"))  # Trailing slash important
+    r = SESSION.get(urljoin(TARGET, "/api/Basket/"))
     if r.status_code == 200:
         data = r.json()
         BASKET_ID = data.get("id")
         if BASKET_ID:
             print(f"   [Setup] Basket ID: {BASKET_ID}")
             return True
-    print(f"   [Setup] Get basket failed: {r.status_code} {r.text}")
+    print(f"   [Setup] Get basket failed: {r.status_code}")
     return False
 
 def add_product_to_basket():
@@ -73,12 +72,21 @@ def add_product_to_basket():
     if r.status_code == 201:
         data = r.json()
         BASKET_ITEM_ID = data["id"]
-        print(f"   [Setup] Added item → BasketItem ID: {BASKET_ITEM_ID}")
+        print(f"   [Setup] Added item → Item ID: {BASKET_ITEM_ID}")
         return True
-    print(f"   [Setup] Add item failed: {r.status_code} {r.text}")
+    print(f"   [Setup] Add item failed: {r.status_code}")
     return False
 
 # ================= VALIDATORS =================
+
+def validate_price_integrity(rule):
+    endpoint = rule["endpoint"]
+    payload = {"product_id": 1, "quantity": 1, "price": 1}
+    r = SESSION.post(urljoin(TARGET, endpoint), data=payload, headers=HEADERS)
+    if r.status_code in [200, 201]:
+        fail(rule["rule_id"], "Client-controlled price accepted")
+    else:
+        success(rule["rule_id"])
 
 def validate_negative_quantity(rule):
     print("   Testing negative quantity...")
@@ -88,7 +96,7 @@ def validate_negative_quantity(rule):
     payload = {"quantity": -10}
     r = SESSION.put(urljoin(TARGET, f"/api/BasketItems/{BASKET_ITEM_ID}"), json=payload, headers=HEADERS)
     if r.status_code == 200:
-        fail(rule["rule_id"], "Negative quantity accepted → Get paid to buy items!")
+        fail(rule["rule_id"], "Negative quantity accepted → Get paid to buy!")
     else:
         success(rule["rule_id"])
 
@@ -100,7 +108,7 @@ def validate_quantity_overflow(rule):
     payload = {"quantity": 999999}
     r = SESSION.put(urljoin(TARGET, f"/api/BasketItems/{BASKET_ITEM_ID}"), json=payload, headers=HEADERS)
     if r.status_code == 200:
-        fail(rule["rule_id"], "Excessive quantity accepted → Potential abuse/DoS")
+        fail(rule["rule_id"], "Excessive quantity accepted")
     else:
         success(rule["rule_id"])
 
@@ -115,14 +123,13 @@ def validate_skip_payment(rule):
     else:
         success(rule["rule_id"])
 
-# Keep other validators as-is (they will pass since endpoints don't exist)
 def validate_coupon_reuse(rule):
     endpoint = rule["endpoint"]
     payload = {"coupon": "TEST100"}
     r1 = SESSION.post(urljoin(TARGET, endpoint), data=payload, headers=HEADERS)
     r2 = SESSION.post(urljoin(TARGET, endpoint), data=payload, headers=HEADERS)
     if r1.status_code == 200 and r2.status_code == 200:
-        fail(rule["rule_id"], "Coupon reused successfully")
+        fail(rule["rule_id"], "Coupon reused")
     else:
         success(rule["rule_id"])
 
@@ -139,7 +146,7 @@ def validate_payment_amount(rule):
     endpoint = rule["endpoint"]
     r = SESSION.post(urljoin(TARGET, endpoint), data={"amount": 1}, headers=HEADERS)
     if r.status_code in [200, 201]:
-        fail(rule["rule_id"], "Client-controlled payment amount accepted")
+        fail(rule["rule_id"], "Client-controlled payment amount")
     else:
         success(rule["rule_id"])
 
@@ -147,7 +154,7 @@ def validate_wallet_topup(rule):
     endpoint = rule["endpoint"]
     r = SESSION.post(urljoin(TARGET, endpoint), data={"amount": 1000000}, headers=HEADERS)
     if r.status_code in [200, 201]:
-        fail(rule["rule_id"], "Excessive wallet top-up accepted")
+        fail(rule["rule_id"], "Excessive wallet top-up")
     else:
         success(rule["rule_id"])
 
@@ -159,7 +166,7 @@ def validate_race_condition(rule):
         if r.status_code in [200, 201]:
             success_count += 1
     if success_count > 1:
-        fail(rule["rule_id"], "Multiple orders from duplicate requests")
+        fail(rule["rule_id"], "Race condition: multiple orders")
     else:
         success(rule["rule_id"])
 
@@ -167,7 +174,7 @@ def validate_discount_limit(rule):
     endpoint = rule["endpoint"]
     r = SESSION.post(urljoin(TARGET, endpoint), data={"discount_percentage": 150}, headers=HEADERS)
     if r.status_code in [200, 201]:
-        fail(rule["rule_id"], "Discount over 100% accepted")
+        fail(rule["rule_id"], "Discount over 100%")
     else:
         success(rule["rule_id"])
 
@@ -183,7 +190,7 @@ def validate_role_escalation(rule):
     endpoint = rule["endpoint"]
     r = SESSION.post(urljoin(TARGET, endpoint), data={"role": "admin"}, headers=HEADERS)
     if r.status_code in [200, 201]:
-        fail(rule["rule_id"], "Unauthorized role escalation allowed")
+        fail(rule["rule_id"], "Role escalation allowed")
     else:
         success(rule["rule_id"])
 
@@ -191,7 +198,6 @@ def validate_role_escalation(rule):
 
 def validate_rule(rule):
     rule_id = rule["rule_id"]
-
     if rule_id == "BLV-PRICE-001":
         validate_price_integrity(rule)
     elif rule_id == "BLV-QTY-001":
@@ -201,7 +207,7 @@ def validate_rule(rule):
     elif rule_id == "BLV-CPN-001":
         validate_coupon_reuse(rule)
     elif rule_id == "BLV-WF-001":
-        validate_skip_payment(rule)  # Now properly detects order without payment
+        validate_skip_payment(rule)
     elif rule_id == "BLV-CPN-002":
         validate_coupon_stacking(rule)
     elif rule_id == "BLV-PAY-001":
@@ -223,9 +229,7 @@ def validate_rule(rule):
 
 def main():
     print("\n🔍 Starting Business Logic Rule Validation on OWASP Juice Shop\n")
-
     rules = load_rules()
-
     for rule in rules:
         print(f"\nTesting Rule: {rule['rule_id']} - {rule['name']}")
         validate_rule(rule)
@@ -243,6 +247,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
-
