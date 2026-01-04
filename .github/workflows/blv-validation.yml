@@ -23,11 +23,22 @@ jobs:
         run: |
           pip install requests
 
-      - name: Start OWASP Juice Shop
+      - name: Start Vulnerable App
         run: |
-          docker run -d -p 3000:3000 bkimminich/juice-shop
-          sleep 20
+          cd vulnerable_app
+          docker build -t vuln-app .
+          docker run -d -p 5000:5000 --name vuln-app vuln-app
+          echo "Waiting for app..."
+          for i in {1..20}; do
+            if curl -s http://localhost:5000 >/dev/null; then echo "Up!"; break; fi
+            sleep 3
+          done
 
       - name: Run Business Logic Rule Validator
+        env:
+          TARGET_URL: http://localhost:5000
         run: |
-          python blv_rule_validator.py http://localhost:3000
+          python blv_rule_validator.py $TARGET_URL
+        
+        
+      
