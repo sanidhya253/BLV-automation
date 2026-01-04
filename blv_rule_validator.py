@@ -89,14 +89,17 @@ def validate_price_integrity(rule):
         success(rule["rule_id"])
 
 def validate_negative_quantity(rule):
-    print("   Testing negative quantity...")
-    if not login() or not get_basket() or not add_product_to_basket():
-        success(rule["rule_id"])
-        return
-    payload = {"quantity": -10}
-    r = SESSION.put(urljoin(TARGET, f"/api/BasketItems/{BASKET_ITEM_ID}"), json=payload, headers=HEADERS)
-    if r.status_code == 200:
-        fail(rule["rule_id"], "Negative quantity accepted → Get paid to buy!")
+    endpoint = "/api/BasketItems/"
+    payload = {
+        "ProductId": 1,
+        "BasketId": 1,
+        "quantity": -5
+    }
+
+    r = SESSION.post(urljoin(TARGET, endpoint), json=payload, headers=HEADERS)
+
+    if r.status_code in [200, 201]:
+        fail(rule["rule_id"], "Negative quantity accepted by e-commerce application")
     else:
         success(rule["rule_id"])
 
@@ -247,3 +250,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
