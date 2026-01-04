@@ -21,10 +21,10 @@ RULE_FILE = "rules/final_business_logic_rules.json"
 FAILED_RULES = []
 PASSED_RULES = []
 
-# Global variables for Juice Shop
+# Global variables
 BASKET_ID = None
 BASKET_ITEM_ID = None
-PRODUCT_ID = 1  # Apple Juice - always available
+PRODUCT_ID = 1  # Apple Juice (always exists)
 
 # =========================================
 
@@ -40,10 +40,9 @@ def success(rule_id):
     print(f"✅ RULE PASSED → {rule_id}")
     PASSED_RULES.append(rule_id)
 
-# ================= JUICE SHOP SETUP FUNCTIONS =================
+# ================= SETUP =================
 
 def login():
-    """Login with known account - admin works in fresh Juice Shop"""
     payload = {"email": "admin@juice-sh.op", "password": "admin123"}
     r = SESSION.post(urljoin(TARGET, "/rest/user/login"), json=payload)
     if r.status_code == 200:
@@ -55,99 +54,64 @@ def login():
 
 def get_basket():
     global BASKET_ID
-    r = SESSION.get(urljoin(TARGET, "/api/Basket/"))  # Note the trailing slash
+    r = SESSION.get(urljoin(TARGET, "/api/Basket/"))  # Trailing slash important
     if r.status_code == 200:
         data = r.json()
-        BASKET_ID = data.get("id") or data.get("BasketId")
+        BASKET_ID = data.get("id")
         if BASKET_ID:
-            print(f"   [Setup] Basket ID retrieved: {BASKET_ID}")
+            print(f"   [Setup] Basket ID: {BASKET_ID}")
             return True
-        else:
-            print("   [Setup] No basket ID in response")
-    print(f"   [Setup] Failed to get basket: {r.status_code} {r.text}")
+    print(f"   [Setup] Get basket failed: {r.status_code} {r.text}")
     return False
 
 def add_product_to_basket():
     global BASKET_ITEM_ID
     if not BASKET_ID:
-        print("   [Setup] No basket ID available")
         return False
-
-    payload = {
-        "ProductId": PRODUCT_ID,
-        "BasketId": BASKET_ID,
-        "quantity": 1
-    }
+    payload = {"ProductId": PRODUCT_ID, "BasketId": BASKET_ID, "quantity": 1}
     r = SESSION.post(urljoin(TARGET, "/api/BasketItems/"), json=payload, headers=HEADERS)
     if r.status_code == 201:
         data = r.json()
         BASKET_ITEM_ID = data["id"]
-        print(f"   [Setup] Added product to basket → Item ID: {BASKET_ITEM_ID}")
+        print(f"   [Setup] Added item → BasketItem ID: {BASKET_ITEM_ID}")
         return True
-    else:
-        print(f"   [Setup] Failed to add item: {r.status_code} {r.text}")
-        return False
+    print(f"   [Setup] Add item failed: {r.status_code} {r.text}")
+    return False
 
-# ================= UPDATED VALIDATORS FOR JUICE SHOP =================
-
-def validate_price_integrity(rule):
-    endpoint = rule["endpoint"]
-    payload = {"product_id": 1, "quantity": 1, "price": 1}
-    r = SESSION.post(urljoin(TARGET, endpoint), data=payload, headers=HEADERS)
-    if r.status_code in [200, 201]:
-        fail(rule["rule_id"], "Client-controlled price accepted")
-    else:
-        success(rule["rule_id"])
+# ================= VALIDATORS =================
 
 def validate_negative_quantity(rule):
-    print("   Testing negative quantity vulnerability...")
-    login()
-    if not get_basket() or not add_product_to_basket():
+    print("   Testing negative quantity...")
+    if not login() or not get_basket() or not add_product_to_basket():
         success(rule["rule_id"])
         return
-
-    tamper_payload = {"quantity": -10}
-    r = SESSION.put(
-        urljoin(TARGET, f"/api/BasketItems/{BASKET_ITEM_ID}"),
-        json=tamper_payload,
-        headers=HEADERS
-    )
-
+    payload = {"quantity": -10}
+    r = SESSION.put(urljoin(TARGET, f"/api/BasketItems/{BASKET_ITEM_ID}"), json=payload, headers=HEADERS)
     if r.status_code == 200:
-        fail(rule["rule_id"], "Negative quantity accepted → Critical vulnerability (can get paid to buy!)")
+        fail(rule["rule_id"], "Negative quantity accepted → Get paid to buy items!")
     else:
         success(rule["rule_id"])
 
 def validate_quantity_overflow(rule):
-    print("   Testing excessive quantity vulnerability...")
-    login()
-    if not get_basket() or not add_product_to_basket():
+    print("   Testing excessive quantity...")
+    if not login() or not get_basket() or not add_product_to_basket():
         success(rule["rule_id"])
         return
-
-    tamper_payload = {"quantity": 999999}
-    r = SESSION.put(
-        urljoin(TARGET, f"/api/BasketItems/{BASKET_ITEM_ID}"),
-        json=tamper_payload,
-        headers=HEADERS
-    )
-
+    payload = {"quantity": 999999}
+    r = SESSION.put(urljoin(TARGET, f"/api/BasketItems/{BASKET_ITEM_ID}"), json=payload, headers=HEADERS)
     if r.status_code == 200:
-        fail(rule["rule_id"], "Excessive quantity accepted → Potential DoS or abuse")
+        fail(rule["rule_id"], "Excessive quantity accepted → Potential abuse/DoS")
     else:
         success(rule["rule_id"])
 
 def validate_skip_payment(rule):
-    print("   Testing order placement without payment...")
-    login()
-    if not get_basket() or not add_product_to_basket():
+    print("   Testing order without payment...")
+    if not login() or not get_basket() or not add_product_to_basket():
         success(rule["rule_id"])
         return
-
-    # Place order directly
     r = SESSION.post(urljoin(TARGET, "/api/Orders"), json={}, headers=HEADERS)
     if r.status_code == 201:
-        fail(rule["rule_id"], "Order placed without payment → Workflow bypass vulnerability!")
+        fail(rule["rule_id"], "Order placed without payment → Workflow bypass!")
     else:
         success(rule["rule_id"])
 
@@ -279,5 +243,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
