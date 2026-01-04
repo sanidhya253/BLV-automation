@@ -41,42 +41,46 @@ def success(rule_id):
     PASSED_RULES.append(rule_id)
 
 # ================= JUICE SHOP SETUP =================
-
-def login_juice_shop():
-    login_payload = {
+def login():
+    """Login to OWASP Juice Shop and establish session"""
+    payload = {
         "email": "test@test.com",
         "password": "test123"
     }
 
-    SESSION.post(
+    r = SESSION.post(
         urljoin(TARGET, "/rest/user/login"),
-        json=login_payload,
+        json=payload,
         headers=HEADERS
     )
 
-def add_product():
+    return r.status_code == 200
+
+
+def get_basket():
+    """Ensure basket exists for the logged-in user"""
+    r = SESSION.get(
+        urljoin(TARGET, "/rest/basket"),
+        headers=HEADERS
+    )
+    return r.status_code == 200
+
+
+def add_product_to_basket():
+    """Add a valid product to basket before testing BLV"""
     payload = {
         "ProductId": 1,
         "quantity": 1
     }
 
-    SESSION.post(
+    r = SESSION.post(
         urljoin(TARGET, "/api/BasketItems/"),
         json=payload,
         headers=HEADERS
     )
 
-def get_basket():
-    global BASKET_ID
-    r = SESSION.get(urljoin(TARGET, "/api/Basket/"))
-    if r.status_code == 200:
-        data = r.json()
-        BASKET_ID = data.get("id")
-        if BASKET_ID:
-            print(f"   [Setup] Basket ID: {BASKET_ID}")
-            return True
-    print(f"   [Setup] Get basket failed: {r.status_code}")
-    return False
+    return r.status_code in [200, 201]
+
 
 # ================= VALIDATORS =================
 
@@ -112,13 +116,24 @@ def validate_negative_quantity(rule):
 
 def validate_quantity_overflow(rule):
     print("   Testing excessive quantity...")
+
     if not login() or not get_basket() or not add_product_to_basket():
-        success(rule["rule_id"])
+        fail(rule["rule_id"], "Failed to prepare valid shopping state")
         return
-    payload = {"quantity": 999999}
-    r = SESSION.put(urljoin(TARGET, f"/api/BasketItems/{BASKET_ITEM_ID}"), json=payload, headers=HEADERS)
-    if r.status_code == 200:
-        fail(rule["rule_id"], "Excessive quantity accepted")
+
+    payload = {
+        "ProductId": 1,
+        "quantity": 999999
+    }
+
+    r = SESSION.post(
+        urljoin(TARGET, "/api/BasketItems/"),
+        json=payload,
+        headers=HEADERS
+    )
+
+    if r.status_code in [200, 201]:
+        fail(rule["rule_id"], "Quantity overflow accepted (real BLV)")
     else:
         success(rule["rule_id"])
 
@@ -257,5 +272,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
