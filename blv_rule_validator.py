@@ -41,7 +41,7 @@ def success(rule_id):
     PASSED_RULES.append(rule_id)
 
 # ================= JUICE SHOP SETUP =================
-def login():
+def login_juice_shop():
     """Login to OWASP Juice Shop and establish session"""
     payload = {
         "email": "test@test.com",
@@ -55,7 +55,6 @@ def login():
     )
 
     return r.status_code == 200
-
 
 def get_basket():
     """Ensure basket exists for the logged-in user"""
@@ -94,8 +93,11 @@ def validate_price_integrity(rule):
         success(rule["rule_id"])
 
 def validate_negative_quantity(rule):
-    login_juice_shop()
-    add_product()
+    print("   Testing negative quantity...")
+
+    if not login_juice_shop() or not get_basket() or not add_product_to_basket():
+        fail(rule["rule_id"], "Failed to prepare shopping session")
+        return
 
     payload = {
         "ProductId": 1,
@@ -109,10 +111,9 @@ def validate_negative_quantity(rule):
     )
 
     if r.status_code in [200, 201]:
-        fail(rule["rule_id"], "Negative quantity accepted (real BLV triggered)")
+        fail(rule["rule_id"], "Negative quantity accepted (real BLV)")
     else:
         success(rule["rule_id"])
-
 
 def validate_quantity_overflow(rule):
     print("   Testing excessive quantity...")
@@ -272,6 +273,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
