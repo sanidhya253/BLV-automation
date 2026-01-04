@@ -9,6 +9,7 @@ on:
 jobs:
   blv-check:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -20,37 +21,41 @@ jobs:
 
       - name: Install Python Dependencies
         run: |
+          python -m pip install --upgrade pip
           pip install requests
 
-      - name: Build and Start Vulnerable App
+      - name: Start OWASP Juice Shop
         run: |
-          echo "Building Docker image for vulnerable app..."
-          cd vulnerable_app
-          docker build -t vuln-app .
-          echo "Starting vulnerable app on port 5000..."
-          docker run -d -p 5000:5000 --name vuln-app vuln-app
-          echo "Waiting for app to be ready..."
-          for i in {1..30}; do
-            if curl -s http://localhost:5000 >/dev/null 2>&1; then
-              echo "Vulnerable app is up and running!"
+          echo "=== Pulling and starting OWASP Juice Shop ==="
+          docker pull bkimminich/juice-shop
+          docker run -d -p 3000:3000 --name juice-shop bkimminich/juice-shop
+          
+          echo "=== Waiting for Juice Shop to be ready ==="
+          for i in {1..40}; do
+            if curl -f -s http://localhost:3000 >/dev/null 2>&1; then
+              echo "Juice Shop is up and running!"
               break
             fi
-            echo "Attempt $i/30: Waiting for app..."
-            sleep 3
+            echo "Attempt $i/40: Waiting for app..."
+            sleep 5
           done
-          if [ $i -eq 30 ]; then
-            echo "Failed to start vulnerable app" >&2
+          
+          if [ $i -eq 40 ]; then
+            echo "ERROR: Juice Shop failed to start" >&2
+            docker logs juice-shop
             exit 1
           fi
 
       - name: Run Business Logic Rule Validator
         env:
-          TARGET_URL: http://localhost:5000
+          TARGET_URL: http://localhost:3000
         run: |
+          echo "=== Running BLV Validator against OWASP Juice Shop ==="
           python blv_rule_validator.py $TARGET_URL
 
-      - name: Cleanup Container
+      - name: Cleanup Docker Container
         if: always()
         run: |
-          docker stop vuln-app || true
-          docker rm vuln-app || true
+          echo "=== Cleaning up Juice Shop container ==="
+          docker stop juice-shop || true
+          docker rm juice-shop || true
