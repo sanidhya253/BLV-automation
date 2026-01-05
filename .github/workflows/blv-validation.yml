@@ -1,61 +1,33 @@
-name: Business Logic Validation
+name: Business Logic Validation Pipeline
 
 on:
   push:
-    branches: [ "main", "master" ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ "main", "master" ]
+    branches: [ "main" ]
 
 jobs:
-  blv-check:
+  blv-validation:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
+          python-version: "3.10"
 
-      - name: Install Python Dependencies
+      - name: Install dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install requests
+          pip install flask requests
 
-      - name: Start OWASP Juice Shop
+      - name: Start Demo E-Commerce App
         run: |
-          echo "=== Pulling and starting OWASP Juice Shop ==="
-          docker pull bkimminich/juice-shop
-          docker run -d -p 3000:3000 --name juice-shop bkimminich/juice-shop
-          
-          echo "=== Waiting for Juice Shop to be ready ==="
-          for i in {1..40}; do
-            if curl -f -s http://localhost:3000 >/dev/null 2>&1; then
-              echo "Juice Shop is up and running!"
-              break
-            fi
-            echo "Attempt $i/40: Waiting for app..."
-            sleep 5
-          done
-          
-          if [ $i -eq 40 ]; then
-            echo "ERROR: Juice Shop failed to start" >&2
-            docker logs juice-shop
-            exit 1
-          fi
+          nohup python app.py &
+          sleep 5
 
-      - name: Run Business Logic Rule Validator
-        env:
-          TARGET_URL: http://localhost:3000
+      - name: Run Business Logic Validator
         run: |
-          echo "=== Running BLV Validator against OWASP Juice Shop ==="
-          python blv_rule_validator.py $TARGET_URL
-
-      - name: Cleanup Docker Container
-        if: always()
-        run: |
-          echo "=== Cleaning up Juice Shop container ==="
-          docker stop juice-shop || true
-          docker rm juice-shop || true
+          python blv_rule_validator.py http://127.0.0.1:5000
