@@ -3,29 +3,26 @@
   "version": "1.0",
   "rules": [
 
-    {
-      "rule_id": "BLV-PRICE-001",
-      "name": "Price Integrity Validation",
-      "endpoint": "/api/cart/add",
-      "expected_behavior": {
-        "price_source": "server",
-        "client_price_modification": false
-      },
-      "severity": "High",
-      "description": "Item price must be calculated server-side and must not be modified by the client."
-    },
-
+{
+  "rules": [
     {
       "rule_id": "BLV-QTY-001",
       "name": "Negative Quantity Rejection",
-      "endpoint": "/api/cart/add",
-      "expected_behavior": {
-        "quantity_minimum": 1
-      },
-      "severity": "Critical",
-      "description": "Negative or zero quantities must be rejected during cart operations."
+      "endpoint": "/add-to-cart",
+      "parameter": "quantity",
+      "condition": ">= 1",
+      "severity": "High"
     },
-
+    {
+      "rule_id": "BLV-PRICE-001",
+      "name": "Price Must Be Positive",
+      "endpoint": "/add-to-cart",
+      "parameter": "price",
+      "condition": "> 0",
+      "severity": "High"
+    }
+  ]
+},
     {
       "rule_id": "BLV-QTY-002",
       "name": "Quantity Upper Bound Validation",
