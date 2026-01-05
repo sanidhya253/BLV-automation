@@ -25,12 +25,13 @@ jobs:
 
       - name: Build vulnerable app Docker image
         run: |
-          docker build -t vulnerable-app .
+          docker build -t vulnerable-app ./vulnerable_app
 
       - name: Run vulnerable app container
         run: |
           docker run -d -p 5000:5000 --name vuln_app vulnerable-app
           sleep 5
+
 
       - name: Run Business Logic Validator
         run: |
