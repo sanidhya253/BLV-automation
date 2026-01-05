@@ -20,9 +20,8 @@
       "parameter": "price",
       "condition": "> 0",
       "severity": "High"
-    }
-  ]
-},
+    },
+    
     {
       "rule_id": "BLV-QTY-002",
       "name": "Quantity Upper Bound Validation",
