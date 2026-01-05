@@ -2,9 +2,6 @@
   "framework": "Business Logic Security Automation Framework",
   "version": "1.0",
   "rules": [
-
-{
-  "rules": [
     {
       "rule_id": "BLV-QTY-001",
       "name": "Negative Quantity Rejection",
@@ -21,7 +18,6 @@
       "condition": "> 0",
       "severity": "High"
     },
-    
     {
       "rule_id": "BLV-QTY-002",
       "name": "Quantity Upper Bound Validation",
@@ -32,7 +28,6 @@
       "severity": "High",
       "description": "Unreasonably large quantities must not be accepted to prevent overflow or abuse."
     },
-
     {
       "rule_id": "BLV-CPN-001",
       "name": "Single-Use Coupon Enforcement",
@@ -40,10 +35,8 @@
       "expected_behavior": {
         "coupon_reuse_allowed": false
       },
-      "severity": "High",
-      "description": "Coupons must not be reusable once successfully applied."
+      "severity": "High"
     },
-
     {
       "rule_id": "BLV-CPN-002",
       "name": "Coupon Stacking Prevention",
@@ -51,10 +44,8 @@
       "expected_behavior": {
         "multiple_coupons_allowed": false
       },
-      "severity": "Medium",
-      "description": "Only one coupon should be applied per order to prevent stacked discounts."
+      "severity": "Medium"
     },
-
     {
       "rule_id": "BLV-PAY-001",
       "name": "Payment Amount Consistency",
@@ -63,10 +54,8 @@
         "amount_source": "server",
         "gateway_amount_must_match_order": true
       },
-      "severity": "Critical",
-      "description": "Payment gateway amount must match the server-calculated order total."
+      "severity": "Critical"
     },
-
     {
       "rule_id": "BLV-WF-001",
       "name": "Mandatory Payment Step Enforcement",
@@ -74,10 +63,8 @@
       "expected_behavior": {
         "payment_required": true
       },
-      "severity": "Critical",
-      "description": "Orders must not be confirmed unless successful payment is completed."
+      "severity": "Critical"
     },
-
     {
       "rule_id": "BLV-WAL-001",
       "name": "Wallet Top-Up Limit Validation",
@@ -85,10 +72,8 @@
       "expected_behavior": {
         "topup_maximum": 50000
       },
-      "severity": "High",
-      "description": "Wallet top-up amounts must be limited to prevent balance overflow or abuse."
+      "severity": "High"
     },
-
     {
       "rule_id": "BLV-RACE-001",
       "name": "Double Spend Race Condition Prevention",
@@ -96,10 +81,8 @@
       "expected_behavior": {
         "idempotency_required": true
       },
-      "severity": "Critical",
-      "description": "Duplicate order submissions must not result in multiple orders or inconsistent charges."
+      "severity": "Critical"
     },
-
     {
       "rule_id": "BLV-DISC-001",
       "name": "Discount Percentage Validation",
@@ -107,10 +90,8 @@
       "expected_behavior": {
         "discount_percentage_maximum": 100
       },
-      "severity": "High",
-      "description": "Discount values must not exceed 100 percent of the order value."
+      "severity": "High"
     },
-
     {
       "rule_id": "BLV-SHIP-001",
       "name": "Shipping Fee Integrity Validation",
@@ -118,10 +99,8 @@
       "expected_behavior": {
         "shipping_fee_editable": false
       },
-      "severity": "Medium",
-      "description": "Shipping charges must be calculated server-side and protected from client-side modification."
+      "severity": "Medium"
     },
-
     {
       "rule_id": "BLV-AUTH-001",
       "name": "Role Escalation Prevention",
@@ -129,9 +108,7 @@
       "expected_behavior": {
         "role_change_allowed": false
       },
-      "severity": "Critical",
-      "description": "Users must not be able to modify their role or escalate privileges through request parameters."
+      "severity": "Critical"
     }
-
   ]
 }
