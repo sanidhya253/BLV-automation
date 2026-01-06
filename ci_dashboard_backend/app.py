@@ -80,7 +80,7 @@ def add_ci_result():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/")
+@app.route("/health")
 def health():
     return {"status": "BLV CI Dashboard API running"}
 
