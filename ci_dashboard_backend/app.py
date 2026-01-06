@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, render_template
 import psycopg2
 import os
 
+DATABASE_URL = os.environ.get("DATABASE_URL")
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 app = Flask(
