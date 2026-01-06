@@ -2,9 +2,12 @@ from flask import Flask, request, jsonify, render_template
 import psycopg2
 import os
 
-app = Flask(__name__, template_folder="templates")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
+app = Flask(
+    __name__,
+    template_folder=os.path.join(BASE_DIR, "templates")
+)
 
 def get_db():
     return psycopg2.connect(DATABASE_URL)
