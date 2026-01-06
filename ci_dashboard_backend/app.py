@@ -92,7 +92,7 @@ def health():
 
 @app.route("/dashboard")
 def dashboard():
-    return "<h1>Dashboard route reached</h1>"
+    return render_template("dashboard.html")
 
 if __name__ == "__main__":
     init_db()
