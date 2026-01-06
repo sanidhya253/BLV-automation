@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, request
+from flask import render_template
 import psycopg2
 import os
 
@@ -83,6 +84,10 @@ def add_ci_result():
 @app.route("/")
 def health():
     return {"status": "BLV CI Dashboard API running"}
+
+@app.route("/dashboard")
+def dashboard():
+    return render_template("dashboard.html")
 
 if __name__ == "__main__":
     init_db()
