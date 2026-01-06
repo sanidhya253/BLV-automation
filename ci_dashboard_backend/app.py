@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import sqlite3
 import os
 
@@ -10,6 +10,7 @@ def init_db():
     c = conn.cursor()
     c.execute("""
         CREATE TABLE IF NOT EXISTS ci_results (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id TEXT,
             commit_sha TEXT,
             branch TEXT,
@@ -26,30 +27,44 @@ def init_db():
 def get_ci_results():
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute("SELECT * FROM ci_results ORDER BY created_at DESC")
+    c.execute("""
+        SELECT run_id, commit_sha, branch, status, passed_rules, failed_rules, created_at
+        FROM ci_results
+        ORDER BY created_at DESC
+    """)
     rows = c.fetchall()
     conn.close()
     return jsonify(rows)
 
 @app.route("/api/ci-results", methods=["POST"])
 def add_ci_result():
-    data = flask.request.json
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute(
-        "INSERT INTO ci_results (run_id, commit_sha, branch, status, passed_rules, failed_rules) VALUES (?, ?, ?, ?, ?, ?)",
-        (
-            data["run_id"],
-            data["commit_sha"],
-            data["branch"],
-            data["status"],
-            data["passed_rules"],
-            data["failed_rules"],
+    try:
+        data = request.get_json()
+
+        conn = sqlite3.connect(DB_FILE)
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO ci_results
+            (run_id, commit_sha, branch, status, passed_rules, failed_rules)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            (
+                data.get("run_id"),
+                data.get("commit_sha"),
+                data.get("branch"),
+                data.get("status"),
+                data.get("passed_rules"),
+                data.get("failed_rules"),
+            )
         )
-    )
-    conn.commit()
-    conn.close()
-    return {"message": "CI result stored"}, 201
+        conn.commit()
+        conn.close()
+
+        return jsonify({"message": "CI result stored"}), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     init_db()
