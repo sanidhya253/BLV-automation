@@ -1,59 +1,57 @@
-from flask import Flask, request, jsonify
+from flask import Flask, jsonify
 import sqlite3
-from datetime import datetime
 import os
 
 app = Flask(__name__)
-DB = "ci_results.db"
+DB_FILE = "ci_results.db"
 
 def init_db():
-    with sqlite3.connect(DB) as conn:
-        conn.execute("""
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("""
         CREATE TABLE IF NOT EXISTS ci_results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id TEXT,
             commit_sha TEXT,
             branch TEXT,
             status TEXT,
             passed_rules INTEGER,
             failed_rules INTEGER,
-            timestamp TEXT
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
-        """)
+    """)
+    conn.commit()
+    conn.close()
+
+@app.route("/api/ci-results", methods=["GET"])
+def get_ci_results():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT * FROM ci_results ORDER BY created_at DESC")
+    rows = c.fetchall()
+    conn.close()
+    return jsonify(rows)
 
 @app.route("/api/ci-results", methods=["POST"])
-def receive_ci_result():
-    data = request.json
-
-    with sqlite3.connect(DB) as conn:
-        conn.execute("""
-        INSERT INTO ci_results 
-        (run_id, commit_sha, branch, status, passed_rules, failed_rules, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
+def add_ci_result():
+    data = flask.request.json
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute(
+        "INSERT INTO ci_results (run_id, commit_sha, branch, status, passed_rules, failed_rules) VALUES (?, ?, ?, ?, ?, ?)",
+        (
             data["run_id"],
             data["commit_sha"],
             data["branch"],
             data["status"],
             data["passed_rules"],
             data["failed_rules"],
-            datetime.utcnow().isoformat()
-        ))
-
-    return jsonify({"message": "CI result stored"}), 201
-
-@app.route("/api/ci-results", methods=["GET"])
-def get_ci_results():
-    with sqlite3.connect(DB) as conn:
-        rows = conn.execute("""
-        SELECT run_id, commit_sha, branch, status, passed_rules, failed_rules, timestamp
-        FROM ci_results
-        ORDER BY id DESC
-        """).fetchall()
-
-    return jsonify(rows)
+        )
+    )
+    conn.commit()
+    conn.close()
+    return {"message": "CI result stored"}, 201
 
 if __name__ == "__main__":
     init_db()
-    port = int(os.environ.get("PORT", 5001))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
