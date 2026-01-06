@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>CI/CD Business Logic Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #0f172a;
+            color: #e5e7eb;
+            padding: 30px;
+        }
+        h1 {
+            margin-bottom: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #020617;
+        }
+        th, td {
+            padding: 12px;
+            border: 1px solid #1e293b;
+            text-align: center;
+        }
+        th {
+            background: #1e293b;
+        }
+        .PASS {
+            color: #22c55e;
+            font-weight: bold;
+        }
+        .FAIL {
+            color: #ef4444;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<h1>🚦 CI/CD Business Logic Validation Dashboard</h1>
+
+<table id="ciTable">
+    <thead>
+        <tr>
+            <th>Run ID</th>
+            <th>Commit</th>
+            <th>Branch</th>
+            <th>Status</th>
+            <th>Passed</th>
+            <th>Failed</th>
+            <th>Time</th>
+        </tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<script>
+async function loadResults() {
+    const response = await fetch('/api/ci-results');
+    const data = await response.json();
+
+    const tbody = document.querySelector("#ciTable tbody");
+    tbody.innerHTML = "";
+
+    data.reverse().forEach(row => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td>${row[0]}</td>
+            <td>${row[1]}</td>
+            <td>${row[2]}</td>
+            <td class="${row[3]}">${row[3]}</td>
+            <td>${row[4]}</td>
+            <td>${row[5]}</td>
+            <td>${row[6]}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+// Load immediately + auto refresh every 10s
+loadResults();
+setInterval(loadResults, 10000);
+</script>
+
+</body>
+</html>
