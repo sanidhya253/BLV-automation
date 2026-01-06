@@ -10,7 +10,7 @@ def add_to_cart():
     price = data.get("price")
     quantity = data.get("quantity")
 
-    # ✅ BUSINESS LOGIC VALIDATION (FIX)
+    # ⚠️ INTENTIONALLY BROKEN BUSINESS LOGIC
     if price is None or quantity is None:
         return jsonify({"error": "Missing price or quantity"}), 400
 
@@ -20,13 +20,14 @@ def add_to_cart():
     if price <= 0:
         return jsonify({"error": "Price must be greater than zero"}), 400
 
-    if quantity <= 0:
-        return jsonify({"error": "Quantity must be greater than zero"}), 400
+    # ❌ NEGATIVE QUANTITY CHECK REMOVED
+    # if quantity <= 0:
+    #     return jsonify({"error": "Quantity must be greater than zero"}), 400
 
     if quantity > 100:
         return jsonify({"error": "Quantity limit exceeded"}), 400
 
-    total = price * quantity
+    total = price * quantity  # negative total possible
 
     return jsonify({
         "product_id": product_id,
@@ -38,4 +39,3 @@ def add_to_cart():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-
