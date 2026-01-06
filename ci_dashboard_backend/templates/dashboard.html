@@ -55,33 +55,23 @@
     <tbody></tbody>
 </table>
 
-<script>
-async function loadResults() {
-    const response = await fetch('/api/ci-results');
-    const data = await response.json();
-
-    const tbody = document.querySelector("#ciTable tbody");
-    tbody.innerHTML = "";
-
-    data.reverse().forEach(row => {
-        const tr = document.createElement("tr");
-        tr.innerHTML = `
-            <td>${row[0]}</td>
-            <td>${row[1]}</td>
-            <td>${row[2]}</td>
-            <td class="${row[3]}">${row[3]}</td>
-            <td>${row[4]}</td>
-            <td>${row[5]}</td>
-            <td>${row[6]}</td>
-        `;
-        tbody.appendChild(tr);
-    });
-}
-
-// Load immediately + auto refresh every 10s
-loadResults();
-setInterval(loadResults, 10000);
-</script>
+    <script>
+        fetch("/api/ci-results")
+            .then(res => res.json())
+            .then(data => {
+                const tbody = document.getElementById("rows");
+                data.forEach(row => {
+                    const tr = document.createElement("tr");
+                    row.forEach(col => {
+                        const td = document.createElement("td");
+                        td.innerText = col;
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+            })
+            .catch(err => console.error(err));
+    </script>
 
 </body>
 </html>
