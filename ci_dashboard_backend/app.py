@@ -88,10 +88,6 @@ def health():
 def dashboard():
     return render_template("dashboard.html")
 
-@app.route("/health")
-def health():
-    return {"status": "ok"}
-
 if __name__ == "__main__":
     init_db()
     port = int(os.environ.get("PORT", 5000))
