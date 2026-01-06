@@ -38,9 +38,21 @@ def get_ci_results():
 
 @app.route("/api/ci-results", methods=["POST"])
 def add_ci_result():
-    try:
-        data = request.get_json()
+    data = request.get_json(silent=True)
 
+    if not data:
+        return jsonify({"error": "Invalid or missing JSON"}), 400
+
+    required_fields = [
+        "run_id", "commit_sha", "branch",
+        "status", "passed_rules", "failed_rules"
+    ]
+
+    for field in required_fields:
+        if field not in data:
+            return jsonify({"error": f"Missing field: {field}"}), 400
+
+    try:
         conn = sqlite3.connect(DB_FILE)
         c = conn.cursor()
         c.execute(
@@ -50,12 +62,12 @@ def add_ci_result():
             VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
-                data.get("run_id"),
-                data.get("commit_sha"),
-                data.get("branch"),
-                data.get("status"),
-                data.get("passed_rules"),
-                data.get("failed_rules"),
+                data["run_id"],
+                data["commit_sha"],
+                data["branch"],
+                data["status"],
+                int(data["passed_rules"]),
+                int(data["failed_rules"]),
             )
         )
         conn.commit()
