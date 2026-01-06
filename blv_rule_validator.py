@@ -1,6 +1,8 @@
 import requests
 import json
 import sys
+import os
+import requests
 from urllib.parse import urljoin
 
 # =========================================================
@@ -112,6 +114,29 @@ def validate_rule(rule):
         print(f"⚠️ No validator implemented for {rule_id}")
         success(rule_id)
 
+def send_ci_result_to_api():
+    api_url = os.getenv("CI_RESULT_API")
+
+    if not api_url:
+        print("⚠️ CI_RESULT_API not set, skipping API logging")
+        return
+
+    payload = {
+        "run_id": os.getenv("GITHUB_RUN_ID", "local"),
+        "commit_sha": os.getenv("GITHUB_SHA", "local"),
+        "branch": os.getenv("GITHUB_REF_NAME", "local"),
+        "status": "FAIL" if FAILED_RULES else "PASS",
+        "passed_rules": len(PASSED_RULES),
+        "failed_rules": len(FAILED_RULES)
+    }
+
+    try:
+        r = requests.post(api_url, json=payload, timeout=10)
+        print(f"📡 CI result sent to API → {r.status_code}")
+    except Exception as e:
+        print(f"❌ Failed to send CI result: {e}")
+
+
 # =========================================================
 # MAIN
 # =========================================================
@@ -127,6 +152,8 @@ def main():
     print(f"Rules Passed: {len(PASSED_RULES)}")
     print(f"Rules Failed: {len(FAILED_RULES)}")
 
+    send_ci_result_to_api()
+    
     if FAILED_RULES:
         print("\n❌ CI/CD BLOCKED — Business Logic Violations Found")
         sys.exit(1)
@@ -137,3 +164,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
