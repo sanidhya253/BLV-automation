@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify
 import sqlite3
 from datetime import datetime
+import os
 
 app = Flask(__name__)
 DB = "ci_results.db"
@@ -54,4 +55,5 @@ def get_ci_results():
 
 if __name__ == "__main__":
     init_db()
-    app.run(port=5001, debug=True)
+    port = int(os.environ.get("PORT", 5001))
+    app.run(host="0.0.0.0", port=port)
