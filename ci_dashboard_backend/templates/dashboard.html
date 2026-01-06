@@ -1,59 +1,25 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <title>CI/CD Business Logic Dashboard</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #0f172a;
-            color: #e5e7eb;
-            padding: 30px;
-        }
-        h1 {
-            margin-bottom: 20px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            background: #020617;
-        }
-        th, td {
-            padding: 12px;
-            border: 1px solid #1e293b;
-            text-align: center;
-        }
-        th {
-            background: #1e293b;
-        }
-        .PASS {
-            color: #22c55e;
-            font-weight: bold;
-        }
-        .FAIL {
-            color: #ef4444;
-            font-weight: bold;
-        }
-    </style>
+    <title>BLV CI Dashboard</title>
 </head>
 <body>
+    <h1>BLV CI Dashboard</h1>
 
-<h1>🚦 CI/CD Business Logic Validation Dashboard</h1>
-
-<table id="ciTable">
-    <thead>
-        <tr>
-            <th>Run ID</th>
-            <th>Commit</th>
-            <th>Branch</th>
-            <th>Status</th>
-            <th>Passed</th>
-            <th>Failed</th>
-            <th>Time</th>
-        </tr>
-    </thead>
-    <tbody></tbody>
-</table>
+    <table border="1">
+        <thead>
+            <tr>
+                <th>Run ID</th>
+                <th>Commit</th>
+                <th>Branch</th>
+                <th>Status</th>
+                <th>Passed</th>
+                <th>Failed</th>
+                <th>Time</th>
+            </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+    </table>
 
     <script>
         fetch("/api/ci-results")
@@ -72,6 +38,5 @@
             })
             .catch(err => console.error(err));
     </script>
-
 </body>
 </html>
