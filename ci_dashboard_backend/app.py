@@ -42,7 +42,7 @@ def get_ci_results():
     cur = conn.cursor()
     cur.execute("""
         SELECT run_id, commit_sha, branch, status,
-               passed_rules, failed_rules, created_at
+               passed_rules, failed_rules, failed_rule_details, created_at
         FROM ci_results
         ORDER BY created_at DESC
     """)
@@ -100,7 +100,7 @@ def dashboard():
     cur = conn.cursor()
     cur.execute("""
         SELECT run_id, commit_sha, branch, status,
-               passed_rules, failed_rules,failed_rule_details, created_at
+               passed_rules, failed_rules, failed_rule_details, created_at
         FROM ci_results
         ORDER BY created_at DESC
     """)
