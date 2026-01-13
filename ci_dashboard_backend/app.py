@@ -92,7 +92,18 @@ def health():
 
 @app.route("/dashboard")
 def dashboard():
-    return render_template("dashboard.html")
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT run_id, commit_sha, branch, status,
+               passed_rules, failed_rules, created_at
+        FROM ci_results
+        ORDER BY created_at DESC
+    """)
+    results = cur.fetchall()
+    conn.close()
+
+    return render_template("dashboard.html", results=results)
 
 if __name__ == "__main__":
     init_db()
