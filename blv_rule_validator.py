@@ -127,8 +127,10 @@ def send_ci_result_to_api():
         "branch": os.getenv("GITHUB_REF_NAME", "local"),
         "status": "FAIL" if FAILED_RULES else "PASS",
         "passed_rules": len(PASSED_RULES),
-        "failed_rules": len(FAILED_RULES)
-    }
+        "failed_rules": len(FAILED_RULES),
+        "failed_rule_details": ", ".join(FAILED_RULES) if FAILED_RULES else ""
+}
+
 
     try:
         r = requests.post(api_url, json=payload, timeout=10)
