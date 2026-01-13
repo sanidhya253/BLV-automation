@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <title>BLV CI Dashboard</title>
@@ -30,7 +31,7 @@
             background: white;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
             min-width: 200px;
         }
 
@@ -50,10 +51,11 @@
             background: white;
             border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
         }
 
-        th, td {
+        th,
+        td {
             padding: 12px 14px;
             text-align: left;
             border-bottom: 1px solid #eee;
@@ -136,37 +138,46 @@
             {% for row in results %}
             <tr>
                 <td>{{ row[0] }}</td>
-                <td style="font-family: monospace;">{{ row[1][:10] }}</td>
+
+                <td style="font-family: monospace;">
+                    {{ row[1][:10] }}
+                </td>
+
                 <td>{{ row[2] }}</td>
+
                 <td>
                     {% if row[3] == "PASS" %}
-                        <span class="status-pass">PASS</span>
+                    <span class="status-pass">PASS</span>
                     {% else %}
-                        <span class="status-fail">FAIL</span>
+                    <span class="status-fail">FAIL</span>
                     {% endif %}
                 </td>
+
                 <td>{{ row[4] }}</td>
                 <td>{{ row[5] }}</td>
-                <td>{{ row[6] }}</td>
-            </tr>
-            <td>
-              {% if row[3] == "FAIL" %}
-                <span style="
-                  color:#7f1d1d;
-                  background:#fee2e2;
-                  padding:4px 8px;
-                  border-radius:6px;
-                  font-weight:bold;
-                ">
-                  {{ row[6] }}
-                </span>
-              {% else %}
-                —
-              {% endif %}
-            </td>
 
+                <td>
+                    {% if row[3] == "FAIL" and row[6] %}
+                    <span style="
+                color:#7f1d1d;
+                background:#fee2e2;
+                padding:4px 8px;
+                border-radius:6px;
+                font-weight:bold;
+                font-family: monospace;
+            ">
+                        {{ row[6] }}
+                    </span>
+                    {% else %}
+                    —
+                    {% endif %}
+                </td>
+
+                <td>{{ row[7].strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            </tr>
             {% endfor %}
         </tbody>
+
     </table>
 
     <footer>
@@ -174,4 +185,5 @@
     </footer>
 
 </body>
+
 </html>
