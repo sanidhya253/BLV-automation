@@ -129,7 +129,7 @@ def send_ci_result_to_api():
         "passed_rules": len(PASSED_RULES),
         "failed_rules": len(FAILED_RULES),
         "failed_rule_details": ", ".join(FAILED_RULES) if FAILED_RULES else ""
-}
+    }
 
 
     try:
@@ -166,4 +166,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
