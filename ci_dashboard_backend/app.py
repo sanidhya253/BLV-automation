@@ -59,7 +59,7 @@ def add_ci_result():
 
     required = [
         "run_id", "commit_sha", "branch",
-        "status", "passed_rules", "failed_rules, "failed_rule_details"
+        "status", "passed_rules", "failed_rules
     ]
 
     for field in required:
