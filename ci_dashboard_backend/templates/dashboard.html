@@ -128,6 +128,7 @@
                 <th>Status</th>
                 <th>Passed</th>
                 <th>Failed</th>
+                <th>Failed Rule</th>
                 <th>Time</th>
             </tr>
         </thead>
@@ -148,6 +149,22 @@
                 <td>{{ row[5] }}</td>
                 <td>{{ row[6] }}</td>
             </tr>
+            <td>
+              {% if row[3] == "FAIL" %}
+                <span style="
+                  color:#7f1d1d;
+                  background:#fee2e2;
+                  padding:4px 8px;
+                  border-radius:6px;
+                  font-weight:bold;
+                ">
+                  {{ row[6] }}
+                </span>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+
             {% endfor %}
         </tbody>
     </table>
