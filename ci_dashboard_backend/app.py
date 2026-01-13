@@ -59,7 +59,7 @@ def add_ci_result():
 
     required = [
         "run_id", "commit_sha", "branch",
-        "status", "passed_rules", "failed_rules"
+        "status", "passed_rules", "failed_rules, failed_rule_details"
     ]
 
     for field in required:
@@ -71,8 +71,8 @@ def add_ci_result():
         cur = conn.cursor()
         cur.execute("""
             INSERT INTO ci_results
-            (run_id, commit_sha, branch, status, passed_rules, failed_rules)
-            VALUES (%s, %s, %s, %s, %s, %s)
+            (run_id, commit_sha, branch, status, passed_rules, failed_rules, failed_rule_details)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
         """, (
             data["run_id"],
             data["commit_sha"],
@@ -80,6 +80,7 @@ def add_ci_result():
             data["status"],
             int(data["passed_rules"]),
             int(data["failed_rules"]),
+            data.get("failed_rule_details", "")
         ))
         conn.commit()
         conn.close()
@@ -99,7 +100,7 @@ def dashboard():
     cur = conn.cursor()
     cur.execute("""
         SELECT run_id, commit_sha, branch, status,
-               passed_rules, failed_rules, created_at
+               passed_rules, failed_rules,failed_rule_details, created_at
         FROM ci_results
         ORDER BY created_at DESC
     """)
