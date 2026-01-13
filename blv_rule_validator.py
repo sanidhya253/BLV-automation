@@ -120,7 +120,7 @@ def send_ci_result_to_api():
     if not api_url:
         print("⚠️ CI_RESULT_API not set, skipping API logging")
         return
-
+    
     payload = {
         "run_id": os.getenv("GITHUB_RUN_ID", "local"),
         "commit_sha": os.getenv("GITHUB_SHA", "local"),
@@ -128,7 +128,7 @@ def send_ci_result_to_api():
         "status": "FAIL" if FAILED_RULES else "PASS",
         "passed_rules": len(PASSED_RULES),
         "failed_rules": len(FAILED_RULES),
-        "failed_rule_details": ", ".join(FAILED_RULES) if FAILED_RULES else ""
+        "failed_rule_details": ", ".join(FAILED_RULES) if FAILED_RULES else None
     }
 
 
@@ -166,5 +166,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
