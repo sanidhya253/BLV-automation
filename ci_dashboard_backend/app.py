@@ -18,6 +18,7 @@ def get_db():
 def init_db():
     conn = get_db()
     cur = conn.cursor()
+
     cur.execute("""
         CREATE TABLE IF NOT EXISTS ci_results (
             id SERIAL PRIMARY KEY,
@@ -27,9 +28,11 @@ def init_db():
             status TEXT,
             passed_rules INTEGER,
             failed_rules INTEGER,
+            failed_rule_details TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+
     conn.commit()
     conn.close()
 
