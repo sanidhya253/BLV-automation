@@ -1,34 +1,60 @@
 from flask import Flask, request, jsonify, render_template
-import sqlite3
 import os
+import sqlite3
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ci_results.db")
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+# Lazy import: only required when DATABASE_URL is set
+if DATABASE_URL:
+    import psycopg2
 
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"))
 
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    return conn
+    if DATABASE_URL:
+        return psycopg2.connect(DATABASE_URL)
+    return sqlite3.connect(DB_PATH)
 
 
 def init_db():
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS ci_results (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            run_id TEXT,
-            commit_sha TEXT,
-            branch TEXT,
-            status TEXT,
-            passed_rules INTEGER,
-            failed_rules INTEGER,
-            failed_rule_details TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+
+    if DATABASE_URL:
+        # Postgres
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS ci_results (
+                id SERIAL PRIMARY KEY,
+                run_id TEXT,
+                commit_sha TEXT,
+                branch TEXT,
+                status TEXT,
+                passed_rules INTEGER,
+                failed_rules INTEGER,
+                failed_rule_details TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+    else:
+        # SQLite
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS ci_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id TEXT,
+                commit_sha TEXT,
+                branch TEXT,
+                status TEXT,
+                passed_rules INTEGER,
+                failed_rules INTEGER,
+                failed_rule_details TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
     conn.commit()
     conn.close()
 
@@ -37,6 +63,7 @@ def init_db():
 def get_ci_results():
     conn = get_db()
     cur = conn.cursor()
+
     cur.execute("""
         SELECT run_id, commit_sha, branch, status,
                passed_rules, failed_rules, failed_rule_details, created_at
@@ -45,6 +72,8 @@ def get_ci_results():
     """)
     rows = cur.fetchall()
     conn.close()
+
+    # rows are tuples in both DBs -> jsonify works
     return jsonify(rows)
 
 
@@ -62,19 +91,38 @@ def add_ci_result():
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute("""
-            INSERT INTO ci_results
-            (run_id, commit_sha, branch, status, passed_rules, failed_rules, failed_rule_details)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (
-            data["run_id"],
-            data["commit_sha"],
-            data["branch"],
-            data["status"],
-            int(data["passed_rules"]),
-            int(data["failed_rules"]),
-            data.get("failed_rule_details")
-        ))
+
+        if DATABASE_URL:
+            # Postgres placeholders
+            cur.execute("""
+                INSERT INTO ci_results
+                (run_id, commit_sha, branch, status, passed_rules, failed_rules, failed_rule_details)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
+            """, (
+                data["run_id"],
+                data["commit_sha"],
+                data["branch"],
+                data["status"],
+                int(data["passed_rules"]),
+                int(data["failed_rules"]),
+                data.get("failed_rule_details")
+            ))
+        else:
+            # SQLite placeholders
+            cur.execute("""
+                INSERT INTO ci_results
+                (run_id, commit_sha, branch, status, passed_rules, failed_rules, failed_rule_details)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (
+                data["run_id"],
+                data["commit_sha"],
+                data["branch"],
+                data["status"],
+                int(data["passed_rules"]),
+                int(data["failed_rules"]),
+                data.get("failed_rule_details")
+            ))
+
         conn.commit()
         conn.close()
         return jsonify({"message": "CI result stored"}), 201
@@ -85,7 +133,7 @@ def add_ci_result():
 
 @app.route("/health")
 def health():
-    return {"status": "BLV CI Dashboard API running (SQLite local)"}
+    return {"status": "BLV CI Dashboard API running"}
 
 
 @app.route("/dashboard")
@@ -105,5 +153,5 @@ def dashboard():
 
 if __name__ == "__main__":
     init_db()
-    port = 5000
-    app.run(host="0.0.0.0", port=port, debug=True)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port, debug=not bool(DATABASE_URL))
