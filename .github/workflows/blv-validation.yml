@@ -35,5 +35,5 @@ jobs:
 
       - name: Run BLV Validator
         env:
-          CI_RESULT_API: https://joann-postnecrotic-unremuneratively.ngrok-free.dev/api/ci-results
+          CI_RESULT_API: https://blv-automation-production.up.railway.app/api/ci-results
         run: python blv_rule_validator.py http://127.0.0.1:5000
