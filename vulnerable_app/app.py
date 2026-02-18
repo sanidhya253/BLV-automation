@@ -15,9 +15,25 @@ MAX_QTY_PER_ITEM = 10
 MAX_DISCOUNT_RATE = 0.30  # 30% max allowed
 
 
+def recalc_cart():
+    CART["subtotal"] = sum(i["line_total"] for i in CART["items"])
+    CART["total"] = max(CART["subtotal"] - CART["discount"], 0.0)
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"}), 200
+
+
+# ✅ NEW: reset endpoint for clean CI tests (prevents state bleed between rules)
+@app.route("/reset", methods=["POST"])
+def reset():
+    CART["items"] = []
+    CART["subtotal"] = 0.0
+    CART["discount"] = 0.0
+    CART["total"] = 0.0
+    USED_COUPONS.clear()
+    return jsonify({"message": "reset done"}), 200
 
 
 @app.route("/add-to-cart", methods=["POST"])
@@ -41,7 +57,7 @@ def add_to_cart():
     if price <= 0:
         return jsonify({"error": "Price must be > 0"}), 400
 
-    # NEW rule support: upper bound quantity (app-side guard)
+    # Quantity upper bound
     if quantity > MAX_QTY_PER_ITEM:
         return jsonify({"error": f"Quantity must be <= {MAX_QTY_PER_ITEM}"}), 400
 
@@ -54,8 +70,7 @@ def add_to_cart():
         "line_total": line_total
     })
 
-    CART["subtotal"] = sum(i["line_total"] for i in CART["items"])
-    CART["total"] = max(CART["subtotal"] - CART["discount"], 0.0)
+    recalc_cart()
 
     return jsonify({
         "message": "Added to cart",
@@ -78,18 +93,30 @@ def apply_coupon():
     if code not in VALID_COUPONS:
         return jsonify({"error": "Invalid coupon"}), 400
 
-    # Coupon reuse protection
-    # if code in USED_COUPONS:
-    #     return jsonify({"error": "Coupon already used"}), 400
+    # ✅ FIX 1: Coupon reuse protection
+    if code in USED_COUPONS:
+        return jsonify({"error": "Coupon already used"}), 400
 
     rate = VALID_COUPONS[code]
-    # Max discount cap (business rule)
+
+    # Keep individual coupon limit (optional extra)
     if rate > MAX_DISCOUNT_RATE:
         return jsonify({"error": "Discount rate too high"}), 400
 
-    discount_amount = CART["subtotal"] * rate
-    CART["discount"] += discount_amount
-    CART["total"] = max(CART["subtotal"] - CART["discount"], 0.0)
+    # ✅ FIX 2: Prevent stacking beyond cap
+    subtotal = CART["subtotal"]
+    if subtotal <= 0:
+        return jsonify({"error": "Invalid subtotal"}), 400
+
+    discount_amount = subtotal * rate
+    new_discount = CART["discount"] + discount_amount
+    new_rate = new_discount / subtotal
+
+    if new_rate > MAX_DISCOUNT_RATE + 1e-9:
+        return jsonify({"error": "Discount cap exceeded"}), 400
+
+    CART["discount"] = new_discount
+    recalc_cart()
 
     USED_COUPONS.add(code)
 
@@ -119,7 +146,7 @@ def checkout():
         "status": "PAID"  # simplified for demo
     }
 
-    # Clear cart after checkout
+    # Clear cart after checkout (but keep USED_COUPONS to enforce single-use globally)
     CART["items"] = []
     CART["subtotal"] = 0.0
     CART["discount"] = 0.0
@@ -130,7 +157,6 @@ def checkout():
 
 @app.route("/admin/report", methods=["GET"])
 def admin_report():
-    # Simple authz control for demo: require header X-Role: admin
     role = (request.headers.get("X-Role") or "").lower()
     if role != "admin":
         return jsonify({"error": "Forbidden"}), 403
