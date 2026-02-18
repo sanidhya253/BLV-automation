@@ -1,114 +1,56 @@
 {
   "framework": "Business Logic Security Automation Framework",
-  "version": "1.0",
+  "version": "1.1",
   "rules": [
     {
       "rule_id": "BLV-QTY-001",
-      "name": "Negative Quantity Rejection",
+      "name": "Quantity must be >= 1",
       "endpoint": "/add-to-cart",
-      "parameter": "quantity",
-      "condition": ">= 1",
-      "severity": "High"
+      "severity": "HIGH",
+      "test": { "quantity": -1, "expected_status": 400 }
     },
     {
       "rule_id": "BLV-PRICE-001",
-      "name": "Price Must Be Positive",
+      "name": "Price must be > 0",
       "endpoint": "/add-to-cart",
-      "parameter": "price",
-      "condition": "> 0",
-      "severity": "High"
+      "severity": "HIGH",
+      "test": { "price": -50, "expected_status": 400 }
     },
     {
       "rule_id": "BLV-QTY-002",
-      "name": "Quantity Upper Bound Validation",
-      "endpoint": "/api/cart/add",
-      "expected_behavior": {
-        "quantity_maximum": 100
-      },
-      "severity": "High",
-      "description": "Unreasonably large quantities must not be accepted to prevent overflow or abuse."
+      "name": "Quantity upper bound enforced",
+      "endpoint": "/add-to-cart",
+      "severity": "HIGH",
+      "expected_behavior": { "quantity_maximum": 10 },
+      "test": { "quantity": 999, "expected_status": 400 }
     },
     {
       "rule_id": "BLV-CPN-001",
-      "name": "Single-Use Coupon Enforcement",
-      "endpoint": "/api/cart/apply-coupon",
-      "expected_behavior": {
-        "coupon_reuse_allowed": false
-      },
-      "severity": "High"
+      "name": "Single-use coupon enforcement",
+      "endpoint": "/apply-coupon",
+      "severity": "HIGH",
+      "expected_behavior": { "coupon_reuse_allowed": false },
+      "test": { "coupon_code": "SAVE10" }
     },
     {
       "rule_id": "BLV-CPN-002",
-      "name": "Coupon Stacking Prevention",
-      "endpoint": "/api/cart/apply-coupon",
-      "expected_behavior": {
-        "multiple_coupons_allowed": false
-      },
-      "severity": "Medium"
-    },
-    {
-      "rule_id": "BLV-PAY-001",
-      "name": "Payment Amount Consistency",
-      "endpoint": "/api/payment/initiate",
-      "expected_behavior": {
-        "amount_source": "server",
-        "gateway_amount_must_match_order": true
-      },
-      "severity": "Critical"
+      "name": "Coupon stacking prevention (cap total discount)",
+      "endpoint": "/apply-coupon",
+      "severity": "MEDIUM",
+      "expected_behavior": { "max_discount_rate": 0.30 },
+      "test": { "coupon_code": "SAVE20" }
     },
     {
       "rule_id": "BLV-WF-001",
-      "name": "Mandatory Payment Step Enforcement",
-      "endpoint": "/api/order/confirm",
-      "expected_behavior": {
-        "payment_required": true
-      },
-      "severity": "Critical"
-    },
-    {
-      "rule_id": "BLV-WAL-001",
-      "name": "Wallet Top-Up Limit Validation",
-      "endpoint": "/api/wallet/topup",
-      "expected_behavior": {
-        "topup_maximum": 50000
-      },
-      "severity": "High"
-    },
-    {
-      "rule_id": "BLV-RACE-001",
-      "name": "Double Spend Race Condition Prevention",
-      "endpoint": "/api/order/place",
-      "expected_behavior": {
-        "idempotency_required": true
-      },
-      "severity": "Critical"
-    },
-    {
-      "rule_id": "BLV-DISC-001",
-      "name": "Discount Percentage Validation",
-      "endpoint": "/api/cart/apply-coupon",
-      "expected_behavior": {
-        "discount_percentage_maximum": 100
-      },
-      "severity": "High"
-    },
-    {
-      "rule_id": "BLV-SHIP-001",
-      "name": "Shipping Fee Integrity Validation",
-      "endpoint": "/api/checkout",
-      "expected_behavior": {
-        "shipping_fee_editable": false
-      },
-      "severity": "Medium"
+      "name": "Checkout requires cart items and valid total",
+      "endpoint": "/checkout",
+      "severity": "CRITICAL"
     },
     {
       "rule_id": "BLV-AUTH-001",
-      "name": "Role Escalation Prevention",
-      "endpoint": "/api/user/update-profile",
-      "expected_behavior": {
-        "role_change_allowed": false
-      },
-      "severity": "Critical"
+      "name": "Admin endpoint requires admin role",
+      "endpoint": "/admin/report",
+      "severity": "CRITICAL"
     }
   ]
 }
