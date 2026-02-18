@@ -79,8 +79,8 @@ def apply_coupon():
         return jsonify({"error": "Invalid coupon"}), 400
 
     # Coupon reuse protection
-    if code in USED_COUPONS:
-        return jsonify({"error": "Coupon already used"}), 400
+    # if code in USED_COUPONS:
+    #     return jsonify({"error": "Coupon already used"}), 400
 
     rate = VALID_COUPONS[code]
     # Max discount cap (business rule)
