@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template
 import os
 import sqlite3
+import json
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ci_results.db")
@@ -36,6 +37,7 @@ def init_db():
                 passed_rules INTEGER,
                 failed_rules INTEGER,
                 failed_rule_details TEXT,
+                failed_rule_reasons TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -51,6 +53,7 @@ def init_db():
                 passed_rules INTEGER,
                 failed_rules INTEGER,
                 failed_rule_details TEXT,
+                failed_rule_reasons TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -66,14 +69,13 @@ def get_ci_results():
 
     cur.execute("""
         SELECT run_id, commit_sha, branch, status,
-               passed_rules, failed_rules, failed_rule_details, created_at
+               passed_rules, failed_rules, failed_rule_details, created_at, failed_rule_reasons
         FROM ci_results
         ORDER BY created_at DESC
     """)
     rows = cur.fetchall()
     conn.close()
 
-    # rows are tuples in both DBs -> jsonify works
     return jsonify(rows)
 
 
@@ -88,6 +90,18 @@ def add_ci_result():
         if field not in data:
             return jsonify({"error": f"Missing field: {field}"}), 400
 
+    # --- NEW: accept reasons from validator ---
+    # The validator may send a dict like {"BLV-CPN-001": "Coupon reuse allowed"}.
+    # We store as a simple string: "BLV-CPN-001: ...||BLV-WF-001: ..."
+    reasons_dict = data.get("failed_rule_reasons") or {}
+    if isinstance(reasons_dict, dict) and reasons_dict:
+        reasons_str = "||".join([f"{k}: {v}" for k, v in reasons_dict.items()])
+    elif isinstance(reasons_dict, str) and reasons_dict.strip():
+        # If already a string, store as-is
+        reasons_str = reasons_dict.strip()
+    else:
+        reasons_str = None
+
     try:
         conn = get_db()
         cur = conn.cursor()
@@ -96,8 +110,8 @@ def add_ci_result():
             # Postgres placeholders
             cur.execute("""
                 INSERT INTO ci_results
-                (run_id, commit_sha, branch, status, passed_rules, failed_rules, failed_rule_details)
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
+                (run_id, commit_sha, branch, status, passed_rules, failed_rules, failed_rule_details, failed_rule_reasons)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 data["run_id"],
                 data["commit_sha"],
@@ -105,14 +119,15 @@ def add_ci_result():
                 data["status"],
                 int(data["passed_rules"]),
                 int(data["failed_rules"]),
-                data.get("failed_rule_details")
+                data.get("failed_rule_details"),
+                reasons_str
             ))
         else:
             # SQLite placeholders
             cur.execute("""
                 INSERT INTO ci_results
-                (run_id, commit_sha, branch, status, passed_rules, failed_rules, failed_rule_details)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (run_id, commit_sha, branch, status, passed_rules, failed_rules, failed_rule_details, failed_rule_reasons)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 data["run_id"],
                 data["commit_sha"],
@@ -120,7 +135,8 @@ def add_ci_result():
                 data["status"],
                 int(data["passed_rules"]),
                 int(data["failed_rules"]),
-                data.get("failed_rule_details")
+                data.get("failed_rule_details"),
+                reasons_str
             ))
 
         conn.commit()
@@ -142,7 +158,7 @@ def dashboard():
     cur = conn.cursor()
     cur.execute("""
         SELECT run_id, commit_sha, branch, status,
-               passed_rules, failed_rules, failed_rule_details, created_at
+               passed_rules, failed_rules, failed_rule_details, created_at, failed_rule_reasons
         FROM ci_results
         ORDER BY created_at DESC
     """)
