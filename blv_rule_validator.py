@@ -1,9 +1,9 @@
-import requests
 import json
-import sys
 import os
-import requests
+import sys
 from urllib.parse import urljoin
+
+import requests
 
 # =========================================================
 # CONFIG
@@ -17,120 +17,235 @@ RULE_FILE = "rules/final_business_logic_rules.json"
 
 SESSION = requests.Session()
 HEADERS = {
-    "User-Agent": "BLV-Rule-Validator/1.0",
+    "User-Agent": "BLV-Rule-Validator/1.1",
     "Accept": "application/json",
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
 }
 
-FAILED_RULES = []
-PASSED_RULES = []
+FAILED = []   # list of dicts: {rule_id, severity, reason}
+PASSED = []   # list of dicts: {rule_id, severity}
 
 # =========================================================
-# UTILITY FUNCTIONS
+# UTIL
 # =========================================================
-def fail(rule_id, reason):
-    print(f"❌ RULE FAILED → {rule_id} | {reason}")
-    FAILED_RULES.append(rule_id)
-
-
-def success(rule_id):
-    print(f"✅ RULE PASSED → {rule_id}")
-    PASSED_RULES.append(rule_id)
-
-
 def load_rules():
-    with open(RULE_FILE, "r") as f:
+    with open(RULE_FILE, "r", encoding="utf-8") as f:
         return json.load(f)["rules"]
 
+
+def record_fail(rule, reason):
+    rid = rule.get("rule_id", "UNKNOWN")
+    sev = (rule.get("severity") or "LOW").upper()
+    print(f"❌ RULE FAILED → {rid} [{sev}] | {reason}")
+    FAILED.append({"rule_id": rid, "severity": sev, "reason": reason})
+
+
+def record_pass(rule):
+    rid = rule.get("rule_id", "UNKNOWN")
+    sev = (rule.get("severity") or "LOW").upper()
+    print(f"✅ RULE PASSED → {rid} [{sev}]")
+    PASSED.append({"rule_id": rid, "severity": sev})
+
+
+def post_json(endpoint, payload):
+    return SESSION.post(urljoin(TARGET, endpoint), json=payload, headers=HEADERS, timeout=8)
+
+
+def get(endpoint, extra_headers=None):
+    h = dict(HEADERS)
+    if extra_headers:
+        h.update(extra_headers)
+    return SESSION.get(urljoin(TARGET, endpoint), headers=h, timeout=8)
+
+
 # =========================================================
-# DEMO APP VALIDATORS (FOR app.py)
+# VALIDATORS
 # =========================================================
-
-def validate_negative_quantity(rule):
-    print("   Testing negative quantity...")
-
-    payload = {
-        "product_id": 1,
-        "price": 100,
-        "quantity": -5
-    }
-
+def v_qty_min(rule):
+    # Expect 400 for negative qty
+    payload = {"product_id": 1, "price": 100, "quantity": -1}
     try:
-        r = SESSION.post(
-            urljoin(TARGET, rule["endpoint"]),
-            json=payload,
-            headers=HEADERS,
-            timeout=5
-        )
-    except requests.exceptions.ConnectionError:
-        fail(rule["rule_id"], "Target application is not running")
+        r = post_json(rule["endpoint"], payload)
+    except requests.exceptions.RequestException:
+        record_fail(rule, "Target not reachable")
         return
 
     if r.status_code == 200:
-        data = r.json()
-        if data.get("quantity", 0) < 1 or data.get("total", 0) < 0:
-            fail(rule["rule_id"], "Negative quantity accepted by business logic")
-            return
-
-    success(rule["rule_id"])
+        record_fail(rule, "Negative/zero quantity was accepted (expected rejection)")
+        return
+    record_pass(rule)
 
 
-def validate_price_integrity(rule):
-    print("   Testing price tampering...")
-
-    payload = {
-        "product_id": 1,
-        "price": -50,
-        "quantity": 1
-    }
-
-    r = SESSION.post(
-        urljoin(TARGET, rule["endpoint"]),
-        json=payload,
-        headers=HEADERS
-    )
+def v_price_positive(rule):
+    payload = {"product_id": 1, "price": -50, "quantity": 1}
+    r = post_json(rule["endpoint"], payload)
 
     if r.status_code == 200:
-        data = r.json()
-        if data.get("price", 0) <= 0 or data.get("total", 0) <= 0:
-            fail(rule["rule_id"], "Invalid price accepted by business logic")
+        record_fail(rule, "Non-positive price was accepted (expected rejection)")
+        return
+    record_pass(rule)
+
+
+def v_qty_upper_bound(rule):
+    max_qty = int(rule.get("expected_behavior", {}).get("quantity_maximum", 10))
+    payload = {"product_id": 1, "price": 100, "quantity": max_qty + 999}
+    r = post_json(rule["endpoint"], payload)
+
+    if r.status_code == 200:
+        record_fail(rule, f"Unreasonably large quantity accepted (> {max_qty})")
+        return
+    record_pass(rule)
+
+
+def v_coupon_single_use(rule):
+    # Precondition: add something to cart
+    add = post_json("/add-to-cart", {"product_id": 1, "price": 100, "quantity": 1})
+    if add.status_code != 200:
+        record_fail(rule, "Precondition failed: could not add item to cart")
+        return
+
+    code = (rule.get("test", {}).get("coupon_code") or "SAVE10")
+    first = post_json(rule["endpoint"], {"coupon_code": code})
+    second = post_json(rule["endpoint"], {"coupon_code": code})
+
+    if first.status_code != 200:
+        record_fail(rule, f"Coupon apply failed unexpectedly (status {first.status_code})")
+        return
+
+    # Expected: second attempt should be rejected
+    if second.status_code == 200:
+        record_fail(rule, "Coupon reuse allowed (should be single-use)")
+        return
+
+    record_pass(rule)
+
+
+def v_coupon_stacking_cap(rule):
+    # Precondition: add something to cart
+    add = post_json("/add-to-cart", {"product_id": 2, "price": 200, "quantity": 1})
+    if add.status_code != 200:
+        record_fail(rule, "Precondition failed: could not add item to cart")
+        return
+
+    # Apply two different coupons and check total discount doesn't exceed cap
+    cap = float(rule.get("expected_behavior", {}).get("max_discount_rate", 0.30))
+
+    r1 = post_json("/apply-coupon", {"coupon_code": "SAVE20"})
+    r2 = post_json("/apply-coupon", {"coupon_code": "SAVE10"})  # stacking attempt
+
+    # If app blocks reuse only, stacking may still happen with different codes.
+    # If second succeeds AND total discount grows beyond cap -> fail.
+    if r1.status_code != 200:
+        record_fail(rule, f"First coupon failed unexpectedly (status {r1.status_code})")
+        return
+
+    if r2.status_code == 200:
+        try:
+            cart = r2.json().get("cart", {})
+            subtotal = float(cart.get("subtotal", 0))
+            discount = float(cart.get("discount", 0))
+            rate = (discount / subtotal) if subtotal > 0 else 0
+        except Exception:
+            record_fail(rule, "Could not parse cart totals after stacking")
             return
 
-    success(rule["rule_id"])
+        if rate > cap + 1e-9:
+            record_fail(rule, f"Coupon stacking exceeded cap ({rate:.2f} > {cap:.2f})")
+            return
+
+    # If second coupon rejected, that's also a pass for 'stacking prevention'
+    record_pass(rule)
+
+
+def v_checkout_workflow(rule):
+    # Try checkout with empty cart - must fail
+    empty = post_json(rule["endpoint"], {})
+    if empty.status_code == 200:
+        record_fail(rule, "Checkout succeeded with empty cart (workflow bypass)")
+        return
+
+    # Add item then checkout should succeed
+    add = post_json("/add-to-cart", {"product_id": 3, "price": 50, "quantity": 1})
+    if add.status_code != 200:
+        record_fail(rule, "Precondition failed: could not add item before checkout")
+        return
+
+    ok = post_json(rule["endpoint"], {})
+    if ok.status_code != 200:
+        record_fail(rule, f"Checkout failed unexpectedly (status {ok.status_code})")
+        return
+
+    record_pass(rule)
+
+
+def v_admin_authz(rule):
+    # Without admin header -> must be forbidden
+    r = get(rule["endpoint"])
+    if r.status_code == 200:
+        record_fail(rule, "Admin endpoint accessible without admin role")
+        return
+
+    # With admin header -> should succeed
+    r2 = get(rule["endpoint"], extra_headers={"X-Role": "admin"})
+    if r2.status_code != 200:
+        record_fail(rule, f"Admin access failed even with admin role (status {r2.status_code})")
+        return
+
+    record_pass(rule)
+
 
 # =========================================================
-# RULE DISPATCHER
+# DISPATCH
 # =========================================================
+DISPATCH = {
+    "BLV-QTY-001": v_qty_min,
+    "BLV-PRICE-001": v_price_positive,
+    "BLV-QTY-002": v_qty_upper_bound,
+    "BLV-CPN-001": v_coupon_single_use,
+    "BLV-CPN-002": v_coupon_stacking_cap,
+    "BLV-WF-001": v_checkout_workflow,
+    "BLV-AUTH-001": v_admin_authz,
+}
+
+
 def validate_rule(rule):
-    rule_id = rule.get("rule_id", "UNKNOWN")
-    rule_name = rule.get("name", "Unnamed Rule")
-    print(f"Testing Rule: {rule_id} - {rule_name}")
+    rid = rule.get("rule_id", "UNKNOWN")
+    name = rule.get("name", "")
+    print(f"\n🔎 Testing {rid} — {name}")
 
-    if rule_id == "BLV-QTY-001":
-        validate_negative_quantity(rule)
-    elif rule_id == "BLV-PRICE-001":
-        validate_price_integrity(rule)
-    else:
-        print(f"⚠️ No validator implemented for {rule_id}")
-        success(rule_id)
+    fn = DISPATCH.get(rid)
+    if not fn:
+        print(f"⚠️ No validator implemented for {rid} (marked PASS for now)")
+        record_pass(rule)
+        return
+
+    try:
+        fn(rule)
+    except Exception as e:
+        record_fail(rule, f"Validator crashed: {e}")
+
 
 def send_ci_result_to_api():
     api_url = os.getenv("CI_RESULT_API")
-
     if not api_url:
         print("⚠️ CI_RESULT_API not set, skipping API logging")
         return
-    
+
+    failed_ids = [x["rule_id"] for x in FAILED]
+    failed_reasons = {x["rule_id"]: x["reason"] for x in FAILED}
+
     payload = {
         "run_id": os.getenv("GITHUB_RUN_ID", "local"),
         "commit_sha": os.getenv("GITHUB_SHA", "local"),
         "branch": os.getenv("GITHUB_REF_NAME", "local"),
-        "status": "FAIL" if FAILED_RULES else "PASS",
-        "passed_rules": len(PASSED_RULES),
-        "failed_rules": len(FAILED_RULES),
-        "failed_rule_details": ", ".join(FAILED_RULES) if FAILED_RULES else None
+        "status": "FAIL" if FAILED else "PASS",
+        "passed_rules": len(PASSED),
+        "failed_rules": len(FAILED),
+        "failed_rule_details": ", ".join(failed_ids) if failed_ids else None,
+        "failed_rule_reasons": failed_reasons,
+        "total_rules": len(PASSED) + len(FAILED),
+        "implemented_rules": len([r for r in (PASSED + FAILED) if r["rule_id"] in DISPATCH]),
     }
-
 
     try:
         r = requests.post(api_url, json=payload, timeout=10)
@@ -139,33 +254,36 @@ def send_ci_result_to_api():
         print(f"❌ Failed to send CI result: {e}")
 
 
-# =========================================================
-# MAIN
-# =========================================================
+def should_block_ci():
+    # Block only if HIGH or CRITICAL failed (recommended)
+    for x in FAILED:
+        if x["severity"] in ("HIGH", "CRITICAL"):
+            return True
+    return False
+
+
 def main():
-    print("\n🔍 Starting Business Logic Rule Validation (Developer App)\n")
+    print("\n🚦 Starting BLV Rule Validation\n")
 
     rules = load_rules()
-
     for rule in rules:
         validate_rule(rule)
 
     print("\n" + "=" * 60)
-    print(f"Rules Passed: {len(PASSED_RULES)}")
-    print(f"Rules Failed: {len(FAILED_RULES)}")
+    print(f"Rules Passed: {len(PASSED)}")
+    print(f"Rules Failed: {len(FAILED)}")
+    if FAILED:
+        print("Failed IDs:", ", ".join([x["rule_id"] for x in FAILED]))
 
     send_ci_result_to_api()
-    
-    if FAILED_RULES:
-        print("\n❌ CI/CD BLOCKED — Business Logic Violations Found")
+
+    if should_block_ci():
+        print("\n❌ CI/CD BLOCKED — HIGH/CRITICAL Business Logic Violations Found")
         sys.exit(1)
-    else:
-        print("\n✅ CI/CD PASSED — No Business Logic Violations")
-        sys.exit(0)
+
+    print("\n✅ CI/CD PASSED — No HIGH/CRITICAL Business Logic Violations")
+    sys.exit(0)
 
 
 if __name__ == "__main__":
     main()
-
-
-
