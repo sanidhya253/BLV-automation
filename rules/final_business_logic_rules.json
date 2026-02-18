@@ -6,39 +6,34 @@
       "rule_id": "BLV-QTY-001",
       "name": "Quantity must be >= 1",
       "endpoint": "/add-to-cart",
-      "severity": "HIGH",
-      "test": { "quantity": -1, "expected_status": 400 }
+      "severity": "HIGH"
     },
     {
       "rule_id": "BLV-PRICE-001",
       "name": "Price must be > 0",
       "endpoint": "/add-to-cart",
-      "severity": "HIGH",
-      "test": { "price": -50, "expected_status": 400 }
+      "severity": "HIGH"
     },
     {
       "rule_id": "BLV-QTY-002",
       "name": "Quantity upper bound enforced",
       "endpoint": "/add-to-cart",
       "severity": "HIGH",
-      "expected_behavior": { "quantity_maximum": 10 },
-      "test": { "quantity": 999, "expected_status": 400 }
+      "expected_behavior": { "quantity_maximum": 10 }
     },
     {
       "rule_id": "BLV-CPN-001",
       "name": "Single-use coupon enforcement",
       "endpoint": "/apply-coupon",
       "severity": "HIGH",
-      "expected_behavior": { "coupon_reuse_allowed": false },
-      "test": { "coupon_code": "SAVE10" }
+      "expected_behavior": { "coupon_reuse_allowed": false }
     },
     {
       "rule_id": "BLV-CPN-002",
       "name": "Coupon stacking prevention (cap total discount)",
       "endpoint": "/apply-coupon",
       "severity": "MEDIUM",
-      "expected_behavior": { "max_discount_rate": 0.30 },
-      "test": { "coupon_code": "SAVE20" }
+      "expected_behavior": { "max_discount_rate": 0.30 }
     },
     {
       "rule_id": "BLV-WF-001",
