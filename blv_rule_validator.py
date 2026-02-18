@@ -213,6 +213,13 @@ def validate_rule(rule):
     name = rule.get("name", "")
     print(f"\n🔎 Testing {rid} — {name}")
 
+    # ✅ Reset app state before EVERY rule test
+    try:
+        post_json("/reset", {})
+    except Exception:
+        # If reset endpoint isn't available or app is down, continue and let the validator fail properly
+        pass
+
     fn = DISPATCH.get(rid)
     if not fn:
         print(f"⚠️ No validator implemented for {rid} (marked PASS for now)")
@@ -287,3 +294,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
