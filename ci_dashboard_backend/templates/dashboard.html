@@ -227,6 +227,7 @@
       const failed = {{ ns.fail_count | int }};
     
       const ctx = document.getElementById('passFailChart').getContext('2d');
+    
       new Chart(ctx, {
         type: 'doughnut',
         data: {
@@ -238,14 +239,15 @@
         },
         options: {
           responsive: true,
+          maintainAspectRatio: false,   
           plugins: {
-            legend: {
-              position: 'bottom'
-            }
-          }
+            legend: { position: 'bottom' }
+          },
+          cutout: '65%'                 
         }
       });
     </script>
+
 
 </body>
 
