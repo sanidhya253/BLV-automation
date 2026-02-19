@@ -344,6 +344,57 @@ def stats_daily():
 
     return jsonify(data), 200
 
+@app.route("/api/stats/severity", methods=["GET"])
+def stats_severity():
+    """
+    Counts severity of FAILED rule IDs across the last 14 days.
+    Returns: {"CRITICAL": 2, "HIGH": 6, "MEDIUM": 3, "LOW": 0}
+    """
+    sev_map = load_rule_severity_map()
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    if DATABASE_URL:
+        cur.execute("""
+            SELECT failed_rule_details
+            FROM ci_results
+            WHERE status = 'FAIL'
+              AND created_at >= (CURRENT_DATE - INTERVAL '13 days')
+              AND failed_rule_details IS NOT NULL
+        """)
+    else:
+        cur.execute("""
+            SELECT failed_rule_details
+            FROM ci_results
+            WHERE status = 'FAIL'
+              AND DATE(created_at) >= DATE('now', '-13 day')
+              AND failed_rule_details IS NOT NULL
+        """)
+
+    rows = cur.fetchall()
+    conn.close()
+
+    counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+
+    for (details,) in rows:
+        if not details:
+            continue
+        # "A, B, C" -> ["A", "B", "C"]
+        for rid in str(details).split(","):
+            rid = rid.strip()
+            if not rid:
+                continue
+            sev = sev_map.get(rid, "LOW")
+            sev = (sev or "LOW").upper()
+            if sev not in counts:
+                counts["LOW"] += 1
+            else:
+                counts[sev] += 1
+
+    return jsonify(counts), 200
+
+
 
 if __name__ == "__main__":
     init_db()
