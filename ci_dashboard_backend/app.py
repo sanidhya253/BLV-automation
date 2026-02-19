@@ -284,6 +284,52 @@ def download_report_pdf(run_id):
         as_attachment=True,
         download_name=f"blv_report_{run_id}.pdf"
     )
+    
+@app.route("/api/stats/daily", methods=["GET"])
+def stats_daily():
+    """
+    Returns daily counts for PASS/FAIL runs for the last 14 days.
+    Output: [{date: "YYYY-MM-DD", pass: 3, fail: 1}, ...]
+    """
+    conn = get_db()
+    cur = conn.cursor()
+
+    if DATABASE_URL:
+        # Postgres
+        cur.execute("""
+            SELECT DATE(created_at) AS d,
+                   SUM(CASE WHEN status = 'PASS' THEN 1 ELSE 0 END) AS pass_count,
+                   SUM(CASE WHEN status = 'FAIL' THEN 1 ELSE 0 END) AS fail_count
+            FROM ci_results
+            WHERE created_at >= (CURRENT_DATE - INTERVAL '13 days')
+            GROUP BY d
+            ORDER BY d ASC
+        """)
+    else:
+        # SQLite
+        cur.execute("""
+            SELECT DATE(created_at) AS d,
+                   SUM(CASE WHEN status = 'PASS' THEN 1 ELSE 0 END) AS pass_count,
+                   SUM(CASE WHEN status = 'FAIL' THEN 1 ELSE 0 END) AS fail_count
+            FROM ci_results
+            WHERE DATE(created_at) >= DATE('now', '-13 day')
+            GROUP BY d
+            ORDER BY d ASC
+        """)
+
+    rows = cur.fetchall()
+    conn.close()
+
+    data = []
+    for d, p, f in rows:
+        data.append({
+            "date": str(d),
+            "pass": int(p or 0),
+            "fail": int(f or 0),
+        })
+
+    return jsonify(data), 200
+
 
 if __name__ == "__main__":
     init_db()
