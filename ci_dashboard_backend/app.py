@@ -1,3 +1,7 @@
+from io import BytesIO
+from flask import send_file
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 from flask import Flask, request, jsonify, render_template
 import os
 import sqlite3
@@ -212,6 +216,74 @@ def download_report_json(run_id):
     }
     return jsonify(report), 200
 
+@app.route("/report/<run_id>.pdf", methods=["GET"])
+def download_report_pdf(run_id):
+    row = fetch_run_by_run_id(run_id)
+    if not row:
+        return jsonify({"error": "Run not found"}), 404
+
+    run_id, commit_sha, branch, status, passed_rules, failed_rules, failed_rule_details, created_at, failed_rule_reasons = row
+
+    buf = BytesIO()
+    c = canvas.Canvas(buf, pagesize=A4)
+    width, height = A4
+
+    y = height - 60
+
+    # Title
+    c.setFont("Helvetica-Bold", 16)
+    c.drawString(50, y, "BLV CI Scan Report")
+    y -= 30
+
+    c.setFont("Helvetica", 11)
+    meta_lines = [
+        f"Run ID: {run_id}",
+        f"Commit SHA: {commit_sha}",
+        f"Branch: {branch}",
+        f"Status: {status}",
+        f"Passed Rules: {passed_rules}",
+        f"Failed Rules: {failed_rules}",
+        f"Failed Rule IDs: {failed_rule_details or '-'}",
+        f"Time: {created_at}",
+        ""
+    ]
+
+    for line in meta_lines:
+        c.drawString(50, y, line)
+        y -= 16
+        if y < 80:
+            c.showPage()
+            y = height - 60
+            c.setFont("Helvetica", 11)
+
+    # Reasons
+    c.setFont("Helvetica-Bold", 12)
+    c.drawString(50, y, "Failure Reasons")
+    y -= 20
+    c.setFont("Helvetica", 11)
+
+    if failed_rule_reasons:
+        for item in str(failed_rule_reasons).split("||"):
+            c.drawString(60, y, f"- {item}")
+            y -= 16
+            if y < 80:
+                c.showPage()
+                y = height - 60
+                c.setFont("Helvetica", 11)
+    else:
+        c.drawString(60, y, "- None")
+        y -= 16
+
+    c.showPage()
+    c.save()
+    buf.seek(0)
+
+    return send_file(
+        buf,
+        mimetype="application/pdf",
+        as_attachment=True,
+        download_name=f"blv_report_{run_id}.pdf"
+    )
 
 if __name__ == "__main__":
     init_db()
