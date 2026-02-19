@@ -61,6 +61,33 @@ def init_db():
     conn.commit()
     conn.close()
 
+def fetch_run_by_run_id(run_id):
+    conn = get_db()
+    cur = conn.cursor()
+
+    if DATABASE_URL:
+        cur.execute("""
+            SELECT run_id, commit_sha, branch, status,
+                   passed_rules, failed_rules, failed_rule_details, created_at, failed_rule_reasons
+            FROM ci_results
+            WHERE run_id = %s
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (run_id,))
+    else:
+        cur.execute("""
+            SELECT run_id, commit_sha, branch, status,
+                   passed_rules, failed_rules, failed_rule_details, created_at, failed_rule_reasons
+            FROM ci_results
+            WHERE run_id = ?
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (run_id,))
+
+    row = cur.fetchone()
+    conn.close()
+    return row
+
 
 @app.route("/api/ci-results", methods=["GET"])
 def get_ci_results():
@@ -165,6 +192,25 @@ def dashboard():
     results = cur.fetchall()
     conn.close()
     return render_template("dashboard.html", results=results)
+
+@app.route("/report/<run_id>.json", methods=["GET"])
+def download_report_json(run_id):
+    row = fetch_run_by_run_id(run_id)
+    if not row:
+        return jsonify({"error": "Run not found"}), 404
+
+    report = {
+        "run_id": row[0],
+        "commit_sha": row[1],
+        "branch": row[2],
+        "status": row[3],
+        "passed_rules": row[4],
+        "failed_rules": row[5],
+        "failed_rule_details": row[6],
+        "created_at": str(row[7]),
+        "failed_rule_reasons": row[8],
+    }
+    return jsonify(report), 200
 
 
 if __name__ == "__main__":
