@@ -1,28 +1,41 @@
 from io import BytesIO
-from flask import send_file
+from flask import Flask, request, jsonify, render_template, send_file
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
-from flask import Flask, request, jsonify, render_template
 import os
 import sqlite3
 import json
 
-RULE_FILE = os.path.join(os.path.dirname(BASE_DIR), "rules", "final_business_logic_rules.json")
+# -----------------------------
+# Paths (define FIRST)
+# -----------------------------
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))         
+DB_PATH = os.path.join(BASE_DIR, "ci_results.db")
+
+REPO_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))      
+RULE_FILE = os.path.join(REPO_ROOT, "rules", "final_business_logic_rules.json")
+
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if DATABASE_URL:
+    import psycopg2
+
+app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"))
+
 
 def load_rule_severity_map():
     """
     Returns dict: { "BLV-XXX-001": "HIGH", ... }
+    Never crashes the server if rules file is missing.
     """
     try:
         with open(RULE_FILE, "r", encoding="utf-8") as f:
             rules = json.load(f).get("rules", [])
         return {r.get("rule_id"): (r.get("severity") or "LOW").upper() for r in rules}
-    except Exception:
+    except Exception as e:
+        print("Severity map load error:", e)
         return {}
 
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "ci_results.db")
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 
@@ -346,54 +359,51 @@ def stats_daily():
 
 @app.route("/api/stats/severity", methods=["GET"])
 def stats_severity():
-    """
-    Counts severity of FAILED rule IDs across the last 14 days.
-    Returns: {"CRITICAL": 2, "HIGH": 6, "MEDIUM": 3, "LOW": 0}
-    """
-    sev_map = load_rule_severity_map()
+    try:
+        sev_map = load_rule_severity_map()
 
-    conn = get_db()
-    cur = conn.cursor()
+        conn = get_db()
+        cur = conn.cursor()
 
-    if DATABASE_URL:
-        cur.execute("""
-            SELECT failed_rule_details
-            FROM ci_results
-            WHERE status = 'FAIL'
-              AND created_at >= (CURRENT_DATE - INTERVAL '13 days')
-              AND failed_rule_details IS NOT NULL
-        """)
-    else:
-        cur.execute("""
-            SELECT failed_rule_details
-            FROM ci_results
-            WHERE status = 'FAIL'
-              AND DATE(created_at) >= DATE('now', '-13 day')
-              AND failed_rule_details IS NOT NULL
-        """)
+        if DATABASE_URL:
+            cur.execute("""
+                SELECT failed_rule_details
+                FROM ci_results
+                WHERE status = 'FAIL'
+                  AND created_at >= (CURRENT_DATE - INTERVAL '13 days')
+                  AND failed_rule_details IS NOT NULL
+            """)
+        else:
+            cur.execute("""
+                SELECT failed_rule_details
+                FROM ci_results
+                WHERE status = 'FAIL'
+                  AND DATE(created_at) >= DATE('now', '-13 day')
+                  AND failed_rule_details IS NOT NULL
+            """)
 
-    rows = cur.fetchall()
-    conn.close()
+        rows = cur.fetchall()
+        conn.close()
 
-    counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+        counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
 
-    for (details,) in rows:
-        if not details:
-            continue
-        # "A, B, C" -> ["A", "B", "C"]
-        for rid in str(details).split(","):
-            rid = rid.strip()
-            if not rid:
+        for (details,) in rows:
+            if not details:
                 continue
-            sev = sev_map.get(rid, "LOW")
-            sev = (sev or "LOW").upper()
-            if sev not in counts:
-                counts["LOW"] += 1
-            else:
+            for rid in str(details).split(","):
+                rid = rid.strip()
+                if not rid:
+                    continue
+                sev = (sev_map.get(rid, "LOW") or "LOW").upper()
+                if sev not in counts:
+                    sev = "LOW"
                 counts[sev] += 1
 
-    return jsonify(counts), 200
+        return jsonify(counts), 200
 
+    except Exception as e:
+        print("Severity stats error:", e)
+        return jsonify({"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}), 200
 
 
 if __name__ == "__main__":
