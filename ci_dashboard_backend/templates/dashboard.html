@@ -140,22 +140,23 @@
     <!-- SUMMARY CARDS -->
     {% set fail_count = 0 %}
     {% for r in results %}
-      {% if r[3] == "FAIL" %}
-        {% set fail_count = fail_count + 1 %}
-      {% endif %}
+        {% if r[3] == "FAIL" %}
+            {% set fail_count = fail_count + 1 %}
+        {% endif %}
     {% endfor %}
-
+    
     <div class="summary">
         <div class="card">
             <h2>{{ results|length }}</h2>
             <p>Total CI Runs</p>
         </div>
-
+    
         <div class="card">
             <h2>{{ fail_count }}</h2>
             <p>Failed Runs</p>
         </div>
     </div>
+
 
     <!-- TABLE -->
     <table>
