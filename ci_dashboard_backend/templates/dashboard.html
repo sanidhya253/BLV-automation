@@ -150,19 +150,30 @@
         {% endif %}
     {% endfor %}
 
-    <div class="summary">
-      <div class="card" style="width: 760px; min-width: 320px;">
+    <div class="summary" style="align-items: flex-start;">
+      <!-- LEFT: Trend -->
+      <div class="card" style="flex: 2; min-width: 520px;">
         <h2 style="font-size:15px; margin:0 0 10px 0;">Trend (Last 14 Days)</h2>
-    
-        <div style="width: 720px; height: 260px; margin: 0 auto;">
+        <div style="width: 100%; height: 260px;">
           <canvas id="trendChart"></canvas>
         </div>
-    
         <p style="margin-top:10px; font-size:13px; color:#666; text-align:center;">
           Daily CI outcomes (PASS vs FAIL)
         </p>
       </div>
+    
+      <!-- RIGHT: Severity chart -->
+      <div class="card" style="flex: 1; min-width: 320px;">
+        <h2 style="font-size:15px; margin:0 0 10px 0;">Failure Severity (Last 14 Days)</h2>
+        <div style="width: 100%; height: 260px;">
+          <canvas id="severityChart"></canvas>
+        </div>
+        <p style="margin-top:10px; font-size:13px; color:#666; text-align:center;">
+          Severity distribution of failed rules
+        </p>
+      </div>
     </div>
+
 
 
 
@@ -260,6 +271,41 @@
       }
     
       renderTrendChart();
+
+
+      async function renderSeverityChart() {
+        try {
+          const res = await fetch('/api/stats/severity');
+          const counts = await res.json();
+    
+          const labels = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+          const values = labels.map(k => counts[k] || 0);
+    
+          const ctx = document.getElementById('severityChart').getContext('2d');
+          new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+              labels: labels,
+              datasets: [{
+                data: values,
+                borderWidth: 1
+              }]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { position: 'bottom' }
+              },
+              cutout: '65%'
+            }
+          });
+        } catch (e) {
+          console.log("Severity chart error:", e);
+        }
+      }
+    
+      renderSeverityChart();
     </script>
 
 
