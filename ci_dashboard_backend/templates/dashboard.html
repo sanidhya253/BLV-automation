@@ -18,21 +18,21 @@
 
         .subtitle {
             color: #555;
-            margin-bottom: 30px;
+            margin-bottom: 20px;
         }
 
         .summary {
             display: flex;
             gap: 20px;
-            margin-bottom: 30px;
+            margin-bottom: 24px;
             flex-wrap: wrap;
         }
 
         .card {
             background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            padding: 18px 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
             min-width: 200px;
         }
 
@@ -42,17 +42,31 @@
         }
 
         .card p {
-            margin: 5px 0 0;
+            margin: 6px 0 0;
             color: #666;
+        }
+
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .hint {
+            color: #6b7280;
+            font-size: 13px;
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
             background: white;
-            border-radius: 8px;
+            border-radius: 10px;
             overflow: hidden;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
         }
 
         th,
@@ -91,38 +105,27 @@
             display: inline-block;
         }
 
-        .badge {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 999px;
-            font-weight: bold;
+        .mono {
             font-family: monospace;
-            font-size: 12px;
-            margin-right: 6px;
-            margin-bottom: 4px;
-            line-height: 1.2;
         }
 
-        .badge-fail {
-            color: #7f1d1d;
-            background: #fee2e2;
+        .report-links a {
+            text-decoration: none;
+            font-weight: bold;
+            font-size: 13px;
+            padding: 6px 10px;
+            border-radius: 8px;
+            display: inline-block;
+            border: 1px solid #e5e7eb;
+            background: #ffffff;
         }
 
-        .badge-pass {
-            color: #166534;
-            background: #dcfce7;
-        }
-
-        .reasons {
-            max-width: 520px;
-            white-space: normal;
-            color: #444;
-            font-size: 12px;
-            line-height: 1.35;
+        .report-links a:hover {
+            background: #f3f4f6;
         }
 
         footer {
-            margin-top: 40px;
+            margin-top: 30px;
             text-align: center;
             color: #777;
             font-size: 13px;
@@ -144,22 +147,26 @@
             {% set ns.fail_count = ns.fail_count + 1 %}
         {% endif %}
     {% endfor %}
-    
+
     <div class="summary">
         <div class="card">
             <h2>{{ results|length }}</h2>
             <p>Total CI Runs</p>
         </div>
-    
+
         <div class="card">
             <h2>{{ ns.fail_count }}</h2>
             <p>Failed Runs</p>
         </div>
     </div>
 
+    <div class="toolbar">
+        <div class="hint">
+            Tip: Use <b>PDF/JSON</b> to view full scan details for each run.
+        </div>
+    </div>
 
-
-    <!-- TABLE -->
+    <!-- TABLE (MINIMAL VIEW) -->
     <table>
         <thead>
             <tr>
@@ -167,10 +174,6 @@
                 <th>Commit</th>
                 <th>Branch</th>
                 <th>Status</th>
-                <th>Passed</th>
-                <th>Failed</th>
-                <th>Failed Rule</th>
-                <th>Reasons</th>
                 <th>Report</th>
                 <th>Time</th>
             </tr>
@@ -179,55 +182,28 @@
         <tbody>
             {% for row in results %}
             <tr>
-                <td>{{ row[0] }}</td>
+                <td class="mono">{{ row[0] }}</td>
 
-                <td style="font-family: monospace;">
+                <td class="mono">
                     {{ row[1][:10] }}
                 </td>
 
                 <td>{{ row[2] }}</td>
 
                 <td>
-                    {% if row[3] == "PASS" %}
-                    <span class="status-pass">PASS</span>
+                    {% if row[3] and row[3]|trim|upper == "PASS" %}
+                        <span class="status-pass">PASS</span>
                     {% else %}
-                    <span class="status-fail">FAIL</span>
+                        <span class="status-fail">FAIL</span>
                     {% endif %}
                 </td>
 
-                <td>{{ row[4] }}</td>
-                <td>{{ row[5] }}</td>
-
-                <!-- Failed Rule badges -->
-                <td>
-                    {% if row[3] == "FAIL" and row[6] %}
-                        {% for rid in row[6].split(",") %}
-                            <span class="badge badge-fail">{{ rid.strip() }}</span>
-                        {% endfor %}
-                    {% else %}
-                        —
-                    {% endif %}
+                <td class="report-links">
+                    <a href="/report/{{ row[0] }}.json">JSON</a>
+                    &nbsp;
+                    <a href="/report/{{ row[0] }}.pdf">PDF</a>
                 </td>
 
-                <!-- Reasons (expects row[8] string formatted with || separators) -->
-                <td class="reasons">
-                    {% if row[3] == "FAIL" and row[8] %}
-                        {% for item in row[8].split("||") %}
-                            <div>• {{ item }}</div>
-                        {% endfor %}
-                    {% else %}
-                        —
-                    {% endif %}
-                </td>
-
-                <td>
-                  <a href="/report/{{ row[0] }}.json" style="text-decoration:none; font-weight:bold;">JSON</a>
-                  &nbsp;|&nbsp;
-                  <a href="/report/{{ row[0] }}.pdf" style="text-decoration:none; font-weight:bold;">PDF</a>
-                </td>
-
-
-                <!-- Time (index shifts to row[7] if you SELECT created_at as 8th field; after adding reasons it's typically row[7]=time, row[8]=reasons OR vice versa depending on your query) -->
                 <td>{{ row[7] }}</td>
             </tr>
             {% endfor %}
