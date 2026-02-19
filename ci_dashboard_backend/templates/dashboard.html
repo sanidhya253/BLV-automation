@@ -151,26 +151,19 @@
     {% endfor %}
 
     <div class="summary">
-        <div class="card">
-            <h2>{{ results|length }}</h2>
-            <p>Total CI Runs</p>
+      <div class="card" style="width: 360px; min-width: 360px;">
+        <h2 style="font-size:15px; margin:0 0 10px 0;">Pass vs Fail</h2>
+    
+        <div style="width: 320px; height: 180px; margin: 0 auto;">
+          <canvas id="passFailChart"></canvas>
         </div>
-
-        <div class="card">
-            <h2>{{ ns.fail_count }}</h2>
-            <p>Failed Runs</p>
-        </div>
-    </div>
-
-    <div class="summary">
-      <div class="card" style="flex: 1; min-width: 320px;">
-        <h2 style="font-size:16px; margin-bottom:10px;">Pass vs Fail (All Runs)</h2>
-        <canvas id="passFailChart" height="120"></canvas>
-        <p style="margin-top:10px; font-size:13px; color:#666;">
+    
+        <p style="margin-top:10px; font-size:13px; color:#666; text-align:center;">
           PASS: {{ results|length - ns.fail_count }} | FAIL: {{ ns.fail_count }}
         </p>
       </div>
     </div>
+
 
 
     <div class="toolbar">
