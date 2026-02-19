@@ -221,11 +221,11 @@
                 </td>
 
                 <td>
-                  <a href="/report/{{ row[0] }}.json"
-                     style="text-decoration:none; font-weight:bold;">
-                     JSON
-                  </a>
+                  <a href="/report/{{ row[0] }}.json" style="text-decoration:none; font-weight:bold;">JSON</a>
+                  &nbsp;|&nbsp;
+                  <a href="/report/{{ row[0] }}.pdf" style="text-decoration:none; font-weight:bold;">PDF</a>
                 </td>
+
 
                 <!-- Time (index shifts to row[7] if you SELECT created_at as 8th field; after adding reasons it's typically row[7]=time, row[8]=reasons OR vice versa depending on your query) -->
                 <td>{{ row[7] }}</td>
