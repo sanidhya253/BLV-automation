@@ -151,15 +151,15 @@
     {% endfor %}
 
     <div class="summary">
-      <div class="card" style="width: 360px; min-width: 360px;">
-        <h2 style="font-size:15px; margin:0 0 10px 0;">Pass vs Fail</h2>
+      <div class="card" style="width: 760px; min-width: 320px;">
+        <h2 style="font-size:15px; margin:0 0 10px 0;">Trend (Last 14 Days)</h2>
     
-        <div style="width: 320px; height: 180px; margin: 0 auto;">
-          <canvas id="passFailChart"></canvas>
+        <div style="width: 720px; height: 260px; margin: 0 auto;">
+          <canvas id="trendChart"></canvas>
         </div>
     
         <p style="margin-top:10px; font-size:13px; color:#666; text-align:center;">
-          PASS: {{ results|length - ns.fail_count }} | FAIL: {{ ns.fail_count }}
+          Daily CI outcomes (PASS vs FAIL)
         </p>
       </div>
     </div>
@@ -223,30 +223,45 @@
 
 
     <script>
-      const passed = {{ (results|length - ns.fail_count) | int }};
-      const failed = {{ ns.fail_count | int }};
+      async function renderTrendChart() {
+        try {
+          const res = await fetch('/api/stats/daily');
+          const data = await res.json();
     
-      const ctx = document.getElementById('passFailChart').getContext('2d');
+          const labels = data.map(x => x.date);
+          const passSeries = data.map(x => x.pass);
+          const failSeries = data.map(x => x.fail);
     
-      new Chart(ctx, {
-        type: 'doughnut',
-        data: {
-          labels: ['PASS', 'FAIL'],
-          datasets: [{
-            data: [passed, failed],
-            borderWidth: 1
-          }]
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,   
-          plugins: {
-            legend: { position: 'bottom' }
-          },
-          cutout: '65%'                 
+          const ctx = document.getElementById('trendChart').getContext('2d');
+    
+          new Chart(ctx, {
+            type: 'line',
+            data: {
+              labels: labels,
+              datasets: [
+                { label: 'PASS', data: passSeries, tension: 0.3 },
+                { label: 'FAIL', data: failSeries, tension: 0.3 }
+              ]
+            },
+            options: {
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: { position: 'bottom' }
+              },
+              scales: {
+                y: { beginAtZero: true, ticks: { precision: 0 } }
+              }
+            }
+          });
+        } catch (e) {
+          console.log("Trend chart error:", e);
         }
-      });
+      }
+    
+      renderTrendChart();
     </script>
+
 
 
 </body>
