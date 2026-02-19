@@ -138,10 +138,10 @@
     </div>
 
     <!-- SUMMARY CARDS -->
-    {% set fail_count = 0 %}
+    {% set ns = namespace(fail_count=0) %}
     {% for r in results %}
-        {% if r[3] == "FAIL" %}
-            {% set fail_count = fail_count + 1 %}
+        {% if r[3] and r[3]|trim|upper == "FAIL" %}
+            {% set ns.fail_count = ns.fail_count + 1 %}
         {% endif %}
     {% endfor %}
     
@@ -152,10 +152,11 @@
         </div>
     
         <div class="card">
-            <h2>{{ fail_count }}</h2>
+            <h2>{{ ns.fail_count }}</h2>
             <p>Failed Runs</p>
         </div>
     </div>
+
 
 
     <!-- TABLE -->
