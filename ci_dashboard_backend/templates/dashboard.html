@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <title>BLV CI Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 
     <style>
         body {
@@ -160,6 +162,17 @@
         </div>
     </div>
 
+    <div class="summary">
+      <div class="card" style="flex: 1; min-width: 320px;">
+        <h2 style="font-size:16px; margin-bottom:10px;">Pass vs Fail (All Runs)</h2>
+        <canvas id="passFailChart" height="120"></canvas>
+        <p style="margin-top:10px; font-size:13px; color:#666;">
+          PASS: {{ results|length - ns.fail_count }} | FAIL: {{ ns.fail_count }}
+        </p>
+      </div>
+    </div>
+
+
     <div class="toolbar">
         <div class="hint">
             Tip: Use <b>PDF/JSON</b> to view full scan details for each run.
@@ -214,6 +227,32 @@
     <footer>
         BLV Automation Framework · CI/CD Business Logic Monitoring
     </footer>
+
+
+    <script>
+      const passed = {{ (results|length - ns.fail_count) | int }};
+      const failed = {{ ns.fail_count | int }};
+    
+      const ctx = document.getElementById('passFailChart').getContext('2d');
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['PASS', 'FAIL'],
+          datasets: [{
+            data: [passed, failed],
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          plugins: {
+            legend: {
+              position: 'bottom'
+            }
+          }
+        }
+      });
+    </script>
 
 </body>
 
