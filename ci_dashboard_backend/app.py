@@ -7,6 +7,20 @@ import os
 import sqlite3
 import json
 
+RULE_FILE = os.path.join(os.path.dirname(BASE_DIR), "rules", "final_business_logic_rules.json")
+
+def load_rule_severity_map():
+    """
+    Returns dict: { "BLV-XXX-001": "HIGH", ... }
+    """
+    try:
+        with open(RULE_FILE, "r", encoding="utf-8") as f:
+            rules = json.load(f).get("rules", [])
+        return {r.get("rule_id"): (r.get("severity") or "LOW").upper() for r in rules}
+    except Exception:
+        return {}
+
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ci_results.db")
 
