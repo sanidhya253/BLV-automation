@@ -46,6 +46,15 @@
       "name": "Admin endpoint requires admin role",
       "endpoint": "/admin/report",
       "severity": "CRITICAL"
+    },
+    {
+      "rule_id": "BLV-SHIP-001",
+      "name": "Shipping Fee Integrity Validation",
+      "endpoint": "/checkout-with-shipping",
+      "expected_behavior": {
+        "shipping_fee_editable": false
+      },
+      "severity": "MEDIUM"
     }
-  ]
+    ]
 }
