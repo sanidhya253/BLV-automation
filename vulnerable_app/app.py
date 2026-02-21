@@ -26,7 +26,7 @@ def health():
 # --------------------------------------------------
 # ADD TO CART (INTENTIONALLY VULNERABLE)
 # --------------------------------------------------
-@@app.route("/add-to-cart", methods=["POST"])
+@app.route("/add-to-cart", methods=["POST"])
 def add_to_cart():
     data = request.get_json(silent=True) or {}
 
