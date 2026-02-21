@@ -26,7 +26,7 @@ def health():
 # --------------------------------------------------
 # ADD TO CART (INTENTIONALLY VULNERABLE)
 # --------------------------------------------------
-@app.route("/add-to-cart", methods=["POST"])
+@@app.route("/add-to-cart", methods=["POST"])
 def add_to_cart():
     data = request.get_json(silent=True) or {}
 
@@ -34,9 +34,11 @@ def add_to_cart():
     price = float(data.get("price", 0))
     quantity = int(data.get("quantity", 1))
 
-    # ❌ Vulnerability 1: No price validation
-    # ❌ Vulnerability 2: No minimum quantity check
-    # ❌ Vulnerability 3: No maximum quantity check
+    # ❌ Vulnerability: silently normalize negative quantity
+    if quantity < 0:
+        quantity = abs(quantity)  # converts -5 to 5 instead of rejecting
+
+    # ❌ No explicit validation failure
 
     line_total = price * quantity
 
@@ -51,7 +53,7 @@ def add_to_cart():
     CART["total"] = CART["subtotal"] - CART["discount"]
 
     return jsonify({
-        "message": "Added (vulnerable)",
+        "message": "Added",
         "cart": CART
     }), 200
 
