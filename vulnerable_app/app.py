@@ -134,3 +134,22 @@ def reset():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
+
+
+@app.route("/checkout-with-shipping", methods=["POST"])
+def checkout_with_shipping():
+    data = request.get_json(silent=True) or {}
+
+    # ❌ Vulnerability: client controls shipping_fee (should be server-side)
+    shipping_fee = float(data.get("shipping_fee", 0))
+
+    # Pretend subtotal comes from cart
+    subtotal = sum(i.get("line_total", 0) for i in CART["items"])
+    total = subtotal + shipping_fee  # attacker can send negative shipping_fee
+
+    return jsonify({
+        "subtotal": subtotal,
+        "shipping_fee": shipping_fee,
+        "total": total,
+        "status": "PAID"
+    }), 200
