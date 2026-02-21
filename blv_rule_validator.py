@@ -62,17 +62,30 @@ def get(endpoint, extra_headers=None):
 # VALIDATORS
 # =========================================================
 def v_qty_min(rule):
-    # Expect 400 for negative qty
-    payload = {"product_id": 1, "price": 100, "quantity": -1}
-    try:
-        r = post_json(rule["endpoint"], payload)
-    except requests.exceptions.RequestException:
-        record_fail(rule, "Target not reachable")
-        return
+    invalid_cases = [
+        {"product_id": 1, "price": 100, "quantity": -1},
+        {"product_id": 1, "price": 100, "quantity": 0},
+        {"product_id": 1, "price": 100, "quantity": "-1"},
+        {"product_id": 1, "price": 100, "quantity": " -5 "},
+        {"product_id": 1, "price": 100, "quantity": 10**9},
+        {"product_id": 1, "price": 100},  # missing quantity
+    ]
 
-    if r.status_code == 200:
-        record_fail(rule, "Negative/zero quantity was accepted (expected rejection)")
-        return
+    for case in invalid_cases:
+        try:
+            r = post_json(rule["endpoint"], case)
+        except Exception as e:
+            record_fail(rule, f"Request crashed: {e}")
+            return
+
+        # If ANY invalid case returns 200 → vulnerability
+        if r.status_code == 200:
+            record_fail(
+                rule,
+                f"Invalid quantity accepted: {case.get('quantity')}"
+            )
+            return
+
     record_pass(rule)
 
 
@@ -294,4 +307,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
