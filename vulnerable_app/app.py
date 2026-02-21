@@ -119,23 +119,6 @@ def admin_report():
         "total_sales": CART["total"]
     }), 200
 
-
-# --------------------------------------------------
-# RESET (For Testing)
-# --------------------------------------------------
-@app.route("/reset", methods=["POST"])
-def reset():
-    CART["items"] = []
-    CART["subtotal"] = 0.0
-    CART["discount"] = 0.0
-    CART["total"] = 0.0
-    return jsonify({"message": "Cart reset"}), 200
-
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
-
-
 @app.route("/checkout-with-shipping", methods=["POST"])
 def checkout_with_shipping():
     data = request.get_json(silent=True) or {}
@@ -153,3 +136,22 @@ def checkout_with_shipping():
         "total": total,
         "status": "PAID"
     }), 200
+
+
+# --------------------------------------------------
+# RESET (For Testing)
+# --------------------------------------------------
+@app.route("/reset", methods=["POST"])
+def reset():
+    CART["items"] = []
+    CART["subtotal"] = 0.0
+    CART["discount"] = 0.0
+    CART["total"] = 0.0
+    return jsonify({"message": "Cart reset"}), 200
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
+
+
+
