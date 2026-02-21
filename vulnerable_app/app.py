@@ -2,64 +2,41 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# Simple in-memory state for demo/testing
-CART = {"items": [], "subtotal": 0.0, "discount": 0.0, "total": 0.0}
-USED_COUPONS = set()
+# In-memory demo state
+CART = {
+    "items": [],
+    "subtotal": 0.0,
+    "discount": 0.0,
+    "total": 0.0
+}
 
 VALID_COUPONS = {
     "SAVE10": 0.10,
     "SAVE20": 0.20
 }
 
-MAX_QTY_PER_ITEM = 10
-MAX_DISCOUNT_RATE = 0.30  # 30% max allowed
-
-
-def recalc_cart():
-    CART["subtotal"] = sum(i["line_total"] for i in CART["items"])
-    CART["total"] = max(CART["subtotal"] - CART["discount"], 0.0)
-
-
+# --------------------------------------------------
+# HEALTH
+# --------------------------------------------------
 @app.route("/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok"}), 200
+    return jsonify({"status": "vulnerable demo app running"}), 200
 
 
-# ✅ NEW: reset endpoint for clean CI tests (prevents state bleed between rules)
-@app.route("/reset", methods=["POST"])
-def reset():
-    CART["items"] = []
-    CART["subtotal"] = 0.0
-    CART["discount"] = 0.0
-    CART["total"] = 0.0
-    USED_COUPONS.clear()
-    return jsonify({"message": "reset done"}), 200
-
-
+# --------------------------------------------------
+# ADD TO CART (INTENTIONALLY VULNERABLE)
+# --------------------------------------------------
 @app.route("/add-to-cart", methods=["POST"])
 def add_to_cart():
     data = request.get_json(silent=True) or {}
 
     product_id = data.get("product_id")
-    price = data.get("price")
-    quantity = data.get("quantity")
+    price = float(data.get("price", 0))
+    quantity = int(data.get("quantity", 1))
 
-    try:
-        price = float(price)
-        quantity = int(quantity)
-    except (TypeError, ValueError):
-        return jsonify({"error": "Invalid types for price/quantity"}), 400
-
-    # Existing rules
-    if quantity < 1:
-        return jsonify({"error": "Quantity must be >= 1"}), 400
-
-    if price <= 0:
-        return jsonify({"error": "Price must be > 0"}), 400
-
-    # Quantity upper bound
-    if quantity > MAX_QTY_PER_ITEM:
-        return jsonify({"error": f"Quantity must be <= {MAX_QTY_PER_ITEM}"}), 400
+    # ❌ Vulnerability 1: No price validation
+    # ❌ Vulnerability 2: No minimum quantity check
+    # ❌ Vulnerability 3: No maximum quantity check
 
     line_total = price * quantity
 
@@ -70,101 +47,89 @@ def add_to_cart():
         "line_total": line_total
     })
 
-    recalc_cart()
+    CART["subtotal"] += line_total
+    CART["total"] = CART["subtotal"] - CART["discount"]
 
     return jsonify({
-        "message": "Added to cart",
+        "message": "Added (vulnerable)",
         "cart": CART
     }), 200
 
 
+# --------------------------------------------------
+# APPLY COUPON (INTENTIONALLY VULNERABLE)
+# --------------------------------------------------
 @app.route("/apply-coupon", methods=["POST"])
 def apply_coupon():
     data = request.get_json(silent=True) or {}
-    code = (data.get("coupon_code") or "").strip().upper()
-
-    if not code:
-        return jsonify({"error": "coupon_code required"}), 400
-
-    # Must have items before applying coupon (workflow)
-    if not CART["items"]:
-        return jsonify({"error": "Cart is empty"}), 400
+    code = (data.get("coupon_code") or "").upper()
 
     if code not in VALID_COUPONS:
         return jsonify({"error": "Invalid coupon"}), 400
 
-    # ✅ FIX 1: Coupon reuse protection
-    if code in USED_COUPONS:
-        return jsonify({"error": "Coupon already used"}), 400
-
     rate = VALID_COUPONS[code]
 
-    # Keep individual coupon limit (optional extra)
-    if rate > MAX_DISCOUNT_RATE:
-        return jsonify({"error": "Discount rate too high"}), 400
+    # ❌ Vulnerability 4: Coupon reuse allowed
+    # ❌ Vulnerability 5: Coupon stacking allowed
+    # ❌ No max discount cap
 
-    # ✅ FIX 2: Prevent stacking beyond cap
-    subtotal = CART["subtotal"]
-    if subtotal <= 0:
-        return jsonify({"error": "Invalid subtotal"}), 400
-
-    discount_amount = subtotal * rate
-    new_discount = CART["discount"] + discount_amount
-    new_rate = new_discount / subtotal
-
-    if new_rate > MAX_DISCOUNT_RATE + 1e-9:
-        return jsonify({"error": "Discount cap exceeded"}), 400
-
-    CART["discount"] = new_discount
-    recalc_cart()
-
-    USED_COUPONS.add(code)
+    discount_amount = CART["subtotal"] * rate
+    CART["discount"] += discount_amount
+    CART["total"] = CART["subtotal"] - CART["discount"]
 
     return jsonify({
-        "message": "Coupon applied",
-        "coupon_code": code,
-        "discount_added": discount_amount,
+        "message": "Coupon applied (vulnerable)",
         "cart": CART
     }), 200
 
 
+# --------------------------------------------------
+# CHECKOUT (INTENTIONALLY VULNERABLE)
+# --------------------------------------------------
 @app.route("/checkout", methods=["POST"])
 def checkout():
-    # Workflow enforcement: cannot checkout without cart
-    if not CART["items"]:
-        return jsonify({"error": "Cannot checkout with empty cart"}), 400
-
-    # Prevent nonsense totals
-    if CART["total"] <= 0:
-        return jsonify({"error": "Invalid total"}), 400
+    # ❌ Vulnerability 6: Checkout allowed even if cart empty
+    # ❌ Vulnerability 7: No total validation
 
     order = {
         "items": CART["items"],
         "subtotal": CART["subtotal"],
         "discount": CART["discount"],
         "total": CART["total"],
-        "status": "PAID"  # simplified for demo
+        "status": "PAID"
     }
 
-    # Clear cart after checkout (but keep USED_COUPONS to enforce single-use globally)
+    # No cart clearing (race condition prone)
+
+    return jsonify({
+        "message": "Checkout complete (vulnerable)",
+        "order": order
+    }), 200
+
+
+# --------------------------------------------------
+# ADMIN ENDPOINT (INTENTIONALLY VULNERABLE)
+# --------------------------------------------------
+@app.route("/admin/report", methods=["GET"])
+def admin_report():
+    # ❌ Vulnerability 8: No authorization check
+
+    return jsonify({
+        "report": "Sensitive financial report data",
+        "total_sales": CART["total"]
+    }), 200
+
+
+# --------------------------------------------------
+# RESET (For Testing)
+# --------------------------------------------------
+@app.route("/reset", methods=["POST"])
+def reset():
     CART["items"] = []
     CART["subtotal"] = 0.0
     CART["discount"] = 0.0
     CART["total"] = 0.0
-
-    return jsonify({"message": "Checkout complete", "order": order}), 200
-
-
-@app.route("/admin/report", methods=["GET"])
-def admin_report():
-    role = (request.headers.get("X-Role") or "").lower()
-    if role != "admin":
-        return jsonify({"error": "Forbidden"}), 403
-
-    return jsonify({
-        "report": "Sensitive admin report data",
-        "used_coupons_count": len(USED_COUPONS)
-    }), 200
+    return jsonify({"message": "Cart reset"}), 200
 
 
 if __name__ == "__main__":
