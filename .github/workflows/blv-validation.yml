@@ -2,9 +2,9 @@ name: BLV Validation Pipeline
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
   blv-validation:
@@ -29,11 +29,34 @@ jobs:
 
       - name: Run vulnerable app container
         run: |
+          docker rm -f vuln_app || true
           docker run -d -p 5000:5000 --name vuln_app vulnerable-app
-          sleep 5
 
+      - name: Wait for vulnerable app to be ready
+        run: |
+          echo "Waiting for app..."
+          for i in {1..30}; do
+            if curl -fsS http://127.0.0.1:5000/health > /dev/null; then
+              echo "App is ready ✅"
+              exit 0
+            fi
+            echo "Still waiting... ($i)"
+            sleep 1
+          done
+
+          echo "App did not become ready ❌"
+          echo "---- Container logs ----"
+          docker logs vuln_app || true
+          exit 1
 
       - name: Run BLV Validator
         env:
           CI_RESULT_API: https://blv-automation-production.up.railway.app/api/ci-results
-        run: python blv_rule_validator.py http://127.0.0.1:5000
+        run: |
+          python blv_rule_validator.py http://127.0.0.1:5000
+
+      - name: Show container logs (always)
+        if: always()
+        run: |
+          echo "---- Final container logs ----"
+          docker logs vuln_app || true
