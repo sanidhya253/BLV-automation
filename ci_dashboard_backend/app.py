@@ -2,6 +2,10 @@ from io import BytesIO
 from flask import Flask, request, jsonify, render_template, send_file
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import cm
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
 import os
 import sqlite3
 import json
@@ -34,6 +38,28 @@ def load_rule_severity_map():
         return {r.get("rule_id"): (r.get("severity") or "LOW").upper() for r in rules}
     except Exception as e:
         print("Severity map load error:", e)
+        return {}
+
+def load_rules_index():
+    """
+    Returns dict: {rule_id: {name, endpoint, severity, expected_behavior}}
+    """
+    try:
+        with open(RULE_FILE, "r", encoding="utf-8") as f:
+            rules = json.load(f).get("rules", [])
+        idx = {}
+        for r in rules:
+            rid = r.get("rule_id")
+            if rid:
+                idx[rid] = {
+                    "name": r.get("name", ""),
+                    "endpoint": r.get("endpoint", ""),
+                    "severity": (r.get("severity") or "LOW").upper(),
+                    "expected_behavior": r.get("expected_behavior") or {},
+                }
+        return idx
+    except Exception as e:
+        print("Rule index load error:", e)
         return {}
 
 
@@ -224,25 +250,6 @@ def dashboard():
     conn.close()
     return render_template("dashboard.html", results=results)
 
-@app.route("/report/<run_id>.json", methods=["GET"])
-def download_report_json(run_id):
-    row = fetch_run_by_run_id(run_id)
-    if not row:
-        return jsonify({"error": "Run not found"}), 404
-
-    report = {
-        "run_id": row[0],
-        "commit_sha": row[1],
-        "branch": row[2],
-        "status": row[3],
-        "passed_rules": row[4],
-        "failed_rules": row[5],
-        "failed_rule_details": row[6],
-        "created_at": str(row[7]),
-        "failed_rule_reasons": row[8],
-    }
-    return jsonify(report), 200
-
 @app.route("/report/<run_id>.pdf", methods=["GET"])
 def download_report_pdf(run_id):
     row = fetch_run_by_run_id(run_id)
@@ -251,58 +258,177 @@ def download_report_pdf(run_id):
 
     run_id, commit_sha, branch, status, passed_rules, failed_rules, failed_rule_details, created_at, failed_rule_reasons = row
 
-    buf = BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
-    width, height = A4
+    rules_idx = load_rules_index()
 
-    y = height - 60
+    # Parse reasons: "RID: reason||RID2: reason"
+    reasons_map = {}
+    if failed_rule_reasons:
+        for part in str(failed_rule_reasons).split("||"):
+            part = part.strip()
+            if not part:
+                continue
+            if ":" in part:
+                rid, reason = part.split(":", 1)
+                reasons_map[rid.strip()] = reason.strip()
+            else:
+                reasons_map[part.strip()] = ""
+
+    failed_ids = []
+    if failed_rule_details:
+        failed_ids = [x.strip() for x in str(failed_rule_details).split(",") if x.strip()]
+
+    total_rules = int(passed_rules or 0) + int(failed_rules or 0)
+
+    # Severity counts for this run (better than “last 14 days” inside a single report)
+    sev_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
+    for rid in failed_ids:
+        sev = (rules_idx.get(rid, {}).get("severity") or "LOW").upper()
+        if sev not in sev_counts:
+            sev = "LOW"
+        sev_counts[sev] += 1
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=2*cm,
+        rightMargin=2*cm,
+        topMargin=2*cm,
+        bottomMargin=2*cm
+    )
+
+    styles = getSampleStyleSheet()
+    h1 = ParagraphStyle("h1", parent=styles["Heading1"], fontSize=18, spaceAfter=10)
+    h2 = ParagraphStyle("h2", parent=styles["Heading2"], fontSize=13, spaceBefore=10, spaceAfter=6)
+    body = ParagraphStyle("body", parent=styles["BodyText"], fontSize=10, leading=14)
+    mono = ParagraphStyle("mono", parent=styles["BodyText"], fontName="Courier", fontSize=9, leading=12)
+
+    story = []
 
     # Title
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(50, y, "BLV CI Scan Report")
-    y -= 30
+    story.append(Paragraph("BLV CI Scan Report", h1))
+    story.append(Paragraph("Business Logic Vulnerability Automation Framework", body))
+    story.append(Spacer(1, 10))
 
-    c.setFont("Helvetica", 11)
-    meta_lines = [
-        f"Run ID: {run_id}",
-        f"Commit SHA: {commit_sha}",
-        f"Branch: {branch}",
-        f"Status: {status}",
-        f"Passed Rules: {passed_rules}",
-        f"Failed Rules: {failed_rules}",
-        f"Failed Rule IDs: {failed_rule_details or '-'}",
-        f"Time: {created_at}",
-        ""
+    # Run metadata block (table)
+    meta = [
+        ["Run ID", str(run_id)],
+        ["Commit SHA", str(commit_sha)],
+        ["Branch", str(branch)],
+        ["Status", str(status)],
+        ["Created At", str(created_at)],
     ]
+    t = Table(meta, colWidths=[4*cm, 11*cm])
+    t.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.whitesmoke),
+        ("TEXTCOLOR", (0,0), (-1,-1), colors.black),
+        ("FONTNAME", (0,0), (-1,-1), "Helvetica"),
+        ("FONTSIZE", (0,0), (-1,-1), 10),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.lightgrey),
+        ("BACKGROUND", (0,0), (0,-1), colors.whitesmoke),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+    ]))
+    story.append(t)
+    story.append(Spacer(1, 14))
 
-    for line in meta_lines:
-        c.drawString(50, y, line)
-        y -= 16
-        if y < 80:
-            c.showPage()
-            y = height - 60
-            c.setFont("Helvetica", 11)
+    # Executive summary
+    story.append(Paragraph("Executive Summary", h2))
+    summary_text = (
+        f"This automated CI scan validated <b>{total_rules}</b> business logic rules against the target e-commerce API. "
+        f"The run status is <b>{status}</b> with <b>{passed_rules}</b> passed and <b>{failed_rules}</b> failed. "
+        "Failed rules indicate potential logic bypasses that can impact pricing integrity, checkout workflow, coupon controls, "
+        "and authorization enforcement."
+    )
+    story.append(Paragraph(summary_text, body))
+    story.append(Spacer(1, 10))
 
-    # Reasons
-    c.setFont("Helvetica-Bold", 12)
-    c.drawString(50, y, "Failure Reasons")
-    y -= 20
-    c.setFont("Helvetica", 11)
+    # Overview metrics table
+    story.append(Paragraph("Results Overview", h2))
+    overview = [
+        ["Metric", "Value"],
+        ["Total Rules", str(total_rules)],
+        ["Passed", str(passed_rules)],
+        ["Failed", str(failed_rules)],
+        ["Critical Failures", str(sev_counts["CRITICAL"])],
+        ["High Failures", str(sev_counts["HIGH"])],
+        ["Medium Failures", str(sev_counts["MEDIUM"])],
+        ["Low Failures", str(sev_counts["LOW"])],
+    ]
+    t2 = Table(overview, colWidths=[6*cm, 9*cm])
+    t2.setStyle(TableStyle([
+        ("BACKGROUND", (0,0), (-1,0), colors.black),
+        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
+        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+        ("FONTSIZE", (0,0), (-1,0), 10),
+        ("GRID", (0,0), (-1,-1), 0.5, colors.lightgrey),
+        ("FONTNAME", (0,1), (-1,-1), "Helvetica"),
+        ("FONTSIZE", (0,1), (-1,-1), 10),
+        ("VALIGN", (0,0), (-1,-1), "TOP"),
+    ]))
+    story.append(t2)
+    story.append(Spacer(1, 14))
 
-    if failed_rule_reasons:
-        for item in str(failed_rule_reasons).split("||"):
-            c.drawString(60, y, f"- {item}")
-            y -= 16
-            if y < 80:
-                c.showPage()
-                y = height - 60
-                c.setFont("Helvetica", 11)
+    # Detailed findings
+    story.append(Paragraph("Detailed Findings", h2))
+
+    if not failed_ids:
+        story.append(Paragraph("No failed rules were recorded for this run.", body))
     else:
-        c.drawString(60, y, "- None")
-        y -= 16
+        for rid in failed_ids:
+            meta = rules_idx.get(rid, {})
+            name = meta.get("name", "Unknown Rule")
+            endpoint = meta.get("endpoint", "-")
+            sev = meta.get("severity", "LOW")
+            expected = meta.get("expected_behavior", {})
+            observed = reasons_map.get(rid, "No reason recorded.")
 
-    c.showPage()
-    c.save()
+            # Finding header line
+            story.append(Paragraph(f"<b>{rid}</b> — {name}", body))
+            story.append(Paragraph(f"<b>Severity:</b> {sev} &nbsp;&nbsp; <b>Endpoint:</b> <span fontName='Courier'>{endpoint}</span>", body))
+            story.append(Spacer(1, 4))
+
+            # Expected / Observed (table)
+            exp_txt = json.dumps(expected, indent=2) if expected else "As per rule definition (validation enforced server-side)."
+            finding_tbl = Table([
+                ["Expected Behavior", "Observed Behavior"],
+                [Paragraph(f"<pre>{exp_txt}</pre>", mono), Paragraph(observed, body)]
+            ], colWidths=[7.2*cm, 7.8*cm])
+            finding_tbl.setStyle(TableStyle([
+                ("BACKGROUND", (0,0), (-1,0), colors.whitesmoke),
+                ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
+                ("FONTSIZE", (0,0), (-1,0), 10),
+                ("GRID", (0,0), (-1,-1), 0.5, colors.lightgrey),
+                ("VALIGN", (0,0), (-1,-1), "TOP"),
+            ]))
+            story.append(finding_tbl)
+            story.append(Spacer(1, 6))
+
+            # Impact + Recommendations (simple but looks “real”)
+            story.append(Paragraph("<b>Impact:</b> Attackers can abuse this logic flaw to bypass intended business constraints, causing financial loss or unauthorized access.", body))
+            story.append(Paragraph("<b>Recommendation:</b>", body))
+
+            recs = [
+                "Validate inputs strictly on the server side (reject invalid values instead of normalizing).",
+                "Enforce workflow state checks (e.g., checkout requires non-empty cart, verified totals).",
+                "Apply authorization controls for privileged endpoints (role checks, session-based auth).",
+                "Add unit/integration tests to prevent regression and keep CI blocking HIGH/CRITICAL failures.",
+            ]
+            for rline in recs:
+                story.append(Paragraph(f"• {rline}", body))
+
+            story.append(Spacer(1, 12))
+
+    # Footer note
+    story.append(Spacer(1, 6))
+    story.append(Paragraph("Generated automatically by BLV Automation Framework (CI/CD).", ParagraphStyle("foot", parent=body, textColor=colors.grey, fontSize=9)))
+    story.append(PageBreak())
+
+    # Appendix
+    story.append(Paragraph("Appendix: Rules File", h2))
+    story.append(Paragraph(f"Rules Source: <span fontName='Courier'>{RULE_FILE}</span>", body))
+    story.append(Paragraph("Method: Automated rule validation executed in GitHub Actions against a Dockerized target app.", body))
+
+    doc.build(story)
     buf.seek(0)
 
     return send_file(
