@@ -1,32 +1,35 @@
 from io import BytesIO
+import os
+import json
+import sqlite3
+
 from flask import Flask, request, jsonify, render_template, send_file
+
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
-import os
-import sqlite3
-import json
 
 # -----------------------------
 # Paths (define FIRST)
 # -----------------------------
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))         
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "ci_results.db")
 
-REPO_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))      
+REPO_ROOT = os.path.abspath(os.path.join(BASE_DIR, ".."))
 RULE_FILE = os.path.join(REPO_ROOT, "rules", "final_business_logic_rules.json")
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
-
 if DATABASE_URL:
     import psycopg2
 
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"))
 
 
+# -----------------------------
+# Rule helpers
+# -----------------------------
 def load_rule_severity_map():
     """
     Returns dict: { "BLV-XXX-001": "HIGH", ... }
@@ -39,6 +42,7 @@ def load_rule_severity_map():
     except Exception as e:
         print("Severity map load error:", e)
         return {}
+
 
 def load_rules_index():
     """
@@ -63,15 +67,9 @@ def load_rules_index():
         return {}
 
 
-DATABASE_URL = os.environ.get("DATABASE_URL")
-
-# Lazy import: only required when DATABASE_URL is set
-if DATABASE_URL:
-    import psycopg2
-
-app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"))
-
-
+# -----------------------------
+# DB helpers
+# -----------------------------
 def get_db():
     if DATABASE_URL:
         return psycopg2.connect(DATABASE_URL)
@@ -95,9 +93,15 @@ def init_db():
                 failed_rules INTEGER,
                 failed_rule_details TEXT,
                 failed_rule_reasons TEXT,
+                failed_rule_evidence TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Safe migration if table existed without the column
+        try:
+            cur.execute("ALTER TABLE ci_results ADD COLUMN failed_rule_evidence TEXT")
+        except Exception:
+            pass
     else:
         # SQLite
         cur.execute("""
@@ -111,12 +115,19 @@ def init_db():
                 failed_rules INTEGER,
                 failed_rule_details TEXT,
                 failed_rule_reasons TEXT,
+                failed_rule_evidence TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+        # Safe migration if table existed without the column
+        try:
+            cur.execute("ALTER TABLE ci_results ADD COLUMN failed_rule_evidence TEXT")
+        except Exception:
+            pass
 
     conn.commit()
     conn.close()
+
 
 def fetch_run_by_run_id(run_id):
     conn = get_db()
@@ -125,7 +136,8 @@ def fetch_run_by_run_id(run_id):
     if DATABASE_URL:
         cur.execute("""
             SELECT run_id, commit_sha, branch, status,
-                   passed_rules, failed_rules, failed_rule_details, created_at, failed_rule_reasons
+                   passed_rules, failed_rules, failed_rule_details,
+                   created_at, failed_rule_reasons, failed_rule_evidence
             FROM ci_results
             WHERE run_id = %s
             ORDER BY created_at DESC
@@ -134,7 +146,8 @@ def fetch_run_by_run_id(run_id):
     else:
         cur.execute("""
             SELECT run_id, commit_sha, branch, status,
-                   passed_rules, failed_rules, failed_rule_details, created_at, failed_rule_reasons
+                   passed_rules, failed_rules, failed_rule_details,
+                   created_at, failed_rule_reasons, failed_rule_evidence
             FROM ci_results
             WHERE run_id = ?
             ORDER BY created_at DESC
@@ -146,6 +159,9 @@ def fetch_run_by_run_id(run_id):
     return row
 
 
+# -----------------------------
+# API routes
+# -----------------------------
 @app.route("/api/ci-results", methods=["GET"])
 def get_ci_results():
     conn = get_db()
@@ -153,7 +169,8 @@ def get_ci_results():
 
     cur.execute("""
         SELECT run_id, commit_sha, branch, status,
-               passed_rules, failed_rules, failed_rule_details, created_at, failed_rule_reasons
+               passed_rules, failed_rules, failed_rule_details,
+               created_at, failed_rule_reasons, failed_rule_evidence
         FROM ci_results
         ORDER BY created_at DESC
     """)
@@ -174,28 +191,34 @@ def add_ci_result():
         if field not in data:
             return jsonify({"error": f"Missing field: {field}"}), 400
 
-    # --- NEW: accept reasons from validator ---
-    # The validator may send a dict like {"BLV-CPN-001": "Coupon reuse allowed"}.
-    # We store as a simple string: "BLV-CPN-001: ...||BLV-WF-001: ..."
+    # Reasons: store as string "RID: reason||RID2: reason"
     reasons_dict = data.get("failed_rule_reasons") or {}
     if isinstance(reasons_dict, dict) and reasons_dict:
         reasons_str = "||".join([f"{k}: {v}" for k, v in reasons_dict.items()])
     elif isinstance(reasons_dict, str) and reasons_dict.strip():
-        # If already a string, store as-is
         reasons_str = reasons_dict.strip()
     else:
         reasons_str = None
+
+    # Evidence: store as JSON string
+    evidence_obj = data.get("failed_rule_evidence") or {}
+    if isinstance(evidence_obj, (dict, list)):
+        evidence_str = json.dumps(evidence_obj)
+    elif isinstance(evidence_obj, str) and evidence_obj.strip():
+        evidence_str = evidence_obj.strip()
+    else:
+        evidence_str = None
 
     try:
         conn = get_db()
         cur = conn.cursor()
 
         if DATABASE_URL:
-            # Postgres placeholders
             cur.execute("""
                 INSERT INTO ci_results
-                (run_id, commit_sha, branch, status, passed_rules, failed_rules, failed_rule_details, failed_rule_reasons)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                (run_id, commit_sha, branch, status, passed_rules, failed_rules,
+                 failed_rule_details, failed_rule_reasons, failed_rule_evidence)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
             """, (
                 data["run_id"],
                 data["commit_sha"],
@@ -204,14 +227,15 @@ def add_ci_result():
                 int(data["passed_rules"]),
                 int(data["failed_rules"]),
                 data.get("failed_rule_details"),
-                reasons_str
+                reasons_str,
+                evidence_str
             ))
         else:
-            # SQLite placeholders
             cur.execute("""
                 INSERT INTO ci_results
-                (run_id, commit_sha, branch, status, passed_rules, failed_rules, failed_rule_details, failed_rule_reasons)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                (run_id, commit_sha, branch, status, passed_rules, failed_rules,
+                 failed_rule_details, failed_rule_reasons, failed_rule_evidence)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 data["run_id"],
                 data["commit_sha"],
@@ -220,7 +244,8 @@ def add_ci_result():
                 int(data["passed_rules"]),
                 int(data["failed_rules"]),
                 data.get("failed_rule_details"),
-                reasons_str
+                reasons_str,
+                evidence_str
             ))
 
         conn.commit()
@@ -242,7 +267,8 @@ def dashboard():
     cur = conn.cursor()
     cur.execute("""
         SELECT run_id, commit_sha, branch, status,
-               passed_rules, failed_rules, failed_rule_details, created_at, failed_rule_reasons
+               passed_rules, failed_rules, failed_rule_details,
+               created_at, failed_rule_reasons, failed_rule_evidence
         FROM ci_results
         ORDER BY created_at DESC
     """)
@@ -250,17 +276,42 @@ def dashboard():
     conn.close()
     return render_template("dashboard.html", results=results)
 
+
+# -----------------------------
+# Reports
+# -----------------------------
+@app.route("/report/<run_id>.json", methods=["GET"])
+def download_report_json(run_id):
+    row = fetch_run_by_run_id(run_id)
+    if not row:
+        return jsonify({"error": "Run not found"}), 404
+
+    report = {
+        "run_id": row[0],
+        "commit_sha": row[1],
+        "branch": row[2],
+        "status": row[3],
+        "passed_rules": row[4],
+        "failed_rules": row[5],
+        "failed_rule_details": row[6],
+        "created_at": str(row[7]),
+        "failed_rule_reasons": row[8],
+        "failed_rule_evidence": row[9],
+    }
+    return jsonify(report), 200
+
+
 @app.route("/report/<run_id>.pdf", methods=["GET"])
 def download_report_pdf(run_id):
     row = fetch_run_by_run_id(run_id)
     if not row:
         return jsonify({"error": "Run not found"}), 404
 
-    run_id, commit_sha, branch, status, passed_rules, failed_rules, failed_rule_details, created_at, failed_rule_reasons = row
+    run_id, commit_sha, branch, status, passed_rules, failed_rules, failed_rule_details, created_at, failed_rule_reasons, failed_rule_evidence = row
 
     rules_idx = load_rules_index()
 
-    # Parse reasons: "RID: reason||RID2: reason"
+    # Reasons map: "RID: reason||RID2: reason"
     reasons_map = {}
     if failed_rule_reasons:
         for part in str(failed_rule_reasons).split("||"):
@@ -273,13 +324,21 @@ def download_report_pdf(run_id):
             else:
                 reasons_map[part.strip()] = ""
 
+    # Evidence JSON -> dict
+    evidence_map = {}
+    if failed_rule_evidence:
+        try:
+            evidence_map = json.loads(failed_rule_evidence)
+        except Exception:
+            evidence_map = {}
+
     failed_ids = []
     if failed_rule_details:
         failed_ids = [x.strip() for x in str(failed_rule_details).split(",") if x.strip()]
 
     total_rules = int(passed_rules or 0) + int(failed_rules or 0)
 
-    # Severity counts for this run (better than “last 14 days” inside a single report)
+    # Severity counts for this run
     sev_counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}
     for rid in failed_ids:
         sev = (rules_idx.get(rid, {}).get("severity") or "LOW").upper()
@@ -310,23 +369,20 @@ def download_report_pdf(run_id):
     story.append(Paragraph("Business Logic Vulnerability Automation Framework", body))
     story.append(Spacer(1, 10))
 
-    # Run metadata block (table)
-    meta = [
+    # Metadata table
+    meta_tbl = [
         ["Run ID", str(run_id)],
         ["Commit SHA", str(commit_sha)],
         ["Branch", str(branch)],
         ["Status", str(status)],
         ["Created At", str(created_at)],
     ]
-    t = Table(meta, colWidths=[4*cm, 11*cm])
+    t = Table(meta_tbl, colWidths=[4*cm, 11*cm])
     t.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,0), colors.whitesmoke),
-        ("TEXTCOLOR", (0,0), (-1,-1), colors.black),
-        ("FONTNAME", (0,0), (-1,-1), "Helvetica"),
-        ("FONTSIZE", (0,0), (-1,-1), 10),
-        ("GRID", (0,0), (-1,-1), 0.5, colors.lightgrey),
-        ("BACKGROUND", (0,0), (0,-1), colors.whitesmoke),
-        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+        ("BACKGROUND", (0, 0), (0, -1), colors.whitesmoke),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
     ]))
     story.append(t)
     story.append(Spacer(1, 14))
@@ -342,7 +398,7 @@ def download_report_pdf(run_id):
     story.append(Paragraph(summary_text, body))
     story.append(Spacer(1, 10))
 
-    # Overview metrics table
+    # Overview table
     story.append(Paragraph("Results Overview", h2))
     overview = [
         ["Metric", "Value"],
@@ -356,14 +412,12 @@ def download_report_pdf(run_id):
     ]
     t2 = Table(overview, colWidths=[6*cm, 9*cm])
     t2.setStyle(TableStyle([
-        ("BACKGROUND", (0,0), (-1,0), colors.black),
-        ("TEXTCOLOR", (0,0), (-1,0), colors.white),
-        ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-        ("FONTSIZE", (0,0), (-1,0), 10),
-        ("GRID", (0,0), (-1,-1), 0.5, colors.lightgrey),
-        ("FONTNAME", (0,1), (-1,-1), "Helvetica"),
-        ("FONTSIZE", (0,1), (-1,-1), 10),
-        ("VALIGN", (0,0), (-1,-1), "TOP"),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.black),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("FONTSIZE", (0, 0), (-1, -1), 10),
     ]))
     story.append(t2)
     story.append(Spacer(1, 14))
@@ -375,36 +429,61 @@ def download_report_pdf(run_id):
         story.append(Paragraph("No failed rules were recorded for this run.", body))
     else:
         for rid in failed_ids:
-            meta = rules_idx.get(rid, {})
-            name = meta.get("name", "Unknown Rule")
-            endpoint = meta.get("endpoint", "-")
-            sev = meta.get("severity", "LOW")
-            expected = meta.get("expected_behavior", {})
+            rmeta = rules_idx.get(rid, {})
+            name = rmeta.get("name", "Unknown Rule")
+            endpoint = rmeta.get("endpoint", "-")
+            sev = rmeta.get("severity", "LOW")
+            expected = rmeta.get("expected_behavior", {})
             observed = reasons_map.get(rid, "No reason recorded.")
 
-            # Finding header line
             story.append(Paragraph(f"<b>{rid}</b> — {name}", body))
-            story.append(Paragraph(f"<b>Severity:</b> {sev} &nbsp;&nbsp; <b>Endpoint:</b> <span fontName='Courier'>{endpoint}</span>", body))
+            story.append(Paragraph(
+                f"<b>Severity:</b> {sev} &nbsp;&nbsp; <b>Endpoint:</b> <font name='Courier'>{endpoint}</font>",
+                body
+            ))
             story.append(Spacer(1, 4))
 
-            # Expected / Observed (table)
             exp_txt = json.dumps(expected, indent=2) if expected else "As per rule definition (validation enforced server-side)."
             finding_tbl = Table([
                 ["Expected Behavior", "Observed Behavior"],
                 [Paragraph(f"<pre>{exp_txt}</pre>", mono), Paragraph(observed, body)]
             ], colWidths=[7.2*cm, 7.8*cm])
+
             finding_tbl.setStyle(TableStyle([
-                ("BACKGROUND", (0,0), (-1,0), colors.whitesmoke),
-                ("FONTNAME", (0,0), (-1,0), "Helvetica-Bold"),
-                ("FONTSIZE", (0,0), (-1,0), 10),
-                ("GRID", (0,0), (-1,-1), 0.5, colors.lightgrey),
-                ("VALIGN", (0,0), (-1,-1), "TOP"),
+                ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.5, colors.lightgrey),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
             ]))
             story.append(finding_tbl)
             story.append(Spacer(1, 6))
 
-            # Impact + Recommendations (simple but looks “real”)
-            story.append(Paragraph("<b>Impact:</b> Attackers can abuse this logic flaw to bypass intended business constraints, causing financial loss or unauthorized access.", body))
+            # Evidence (Proof)
+            ev = {}
+            if isinstance(evidence_map, dict):
+                ev = evidence_map.get(rid, {}) or {}
+
+            ev_endpoint = ev.get("endpoint", endpoint)
+            ev_payload = ev.get("request_payload", {})
+            ev_code = ev.get("status_code", "-")
+            ev_snippet = ev.get("response_snippet", "")
+
+            story.append(Paragraph("<b>Evidence (Proof)</b>", body))
+            story.append(Paragraph(
+                f"<b>Endpoint:</b> <font name='Courier'>{ev_endpoint}</font><br/>"
+                f"<b>Status Code:</b> {ev_code}<br/>"
+                f"<b>Request Payload:</b> <font name='Courier'>{json.dumps(ev_payload)[:400]}</font><br/>"
+                f"<b>Response Snippet:</b> {ev_snippet}",
+                body
+            ))
+            story.append(Spacer(1, 6))
+
+            # Impact + Recommendation
+            story.append(Paragraph(
+                "<b>Impact:</b> Attackers can abuse this logic flaw to bypass intended business constraints, "
+                "causing financial loss or unauthorized access.",
+                body
+            ))
             story.append(Paragraph("<b>Recommendation:</b>", body))
 
             recs = [
@@ -418,15 +497,18 @@ def download_report_pdf(run_id):
 
             story.append(Spacer(1, 12))
 
-    # Footer note
-    story.append(Spacer(1, 6))
-    story.append(Paragraph("Generated automatically by BLV Automation Framework (CI/CD).", ParagraphStyle("foot", parent=body, textColor=colors.grey, fontSize=9)))
+    story.append(Paragraph(
+        "Generated automatically by BLV Automation Framework (CI/CD).",
+        ParagraphStyle("foot", parent=body, textColor=colors.grey, fontSize=9)
+    ))
     story.append(PageBreak())
 
-    # Appendix
     story.append(Paragraph("Appendix: Rules File", h2))
-    story.append(Paragraph(f"Rules Source: <span fontName='Courier'>{RULE_FILE}</span>", body))
-    story.append(Paragraph("Method: Automated rule validation executed in GitHub Actions against a Dockerized target app.", body))
+    story.append(Paragraph(f"Rules Source: <font name='Courier'>{RULE_FILE}</font>", body))
+    story.append(Paragraph(
+        "Method: Automated rule validation executed in GitHub Actions against a Dockerized target app.",
+        body
+    ))
 
     doc.build(story)
     buf.seek(0)
@@ -437,18 +519,17 @@ def download_report_pdf(run_id):
         as_attachment=True,
         download_name=f"blv_report_{run_id}.pdf"
     )
-    
+
+
+# -----------------------------
+# Charts stats (unchanged)
+# -----------------------------
 @app.route("/api/stats/daily", methods=["GET"])
 def stats_daily():
-    """
-    Returns daily counts for PASS/FAIL runs for the last 14 days.
-    Output: [{date: "YYYY-MM-DD", pass: 3, fail: 1}, ...]
-    """
     conn = get_db()
     cur = conn.cursor()
 
     if DATABASE_URL:
-        # Postgres
         cur.execute("""
             SELECT DATE(created_at) AS d,
                    SUM(CASE WHEN status = 'PASS' THEN 1 ELSE 0 END) AS pass_count,
@@ -459,7 +540,6 @@ def stats_daily():
             ORDER BY d ASC
         """)
     else:
-        # SQLite
         cur.execute("""
             SELECT DATE(created_at) AS d,
                    SUM(CASE WHEN status = 'PASS' THEN 1 ELSE 0 END) AS pass_count,
@@ -475,13 +555,10 @@ def stats_daily():
 
     data = []
     for d, p, f in rows:
-        data.append({
-            "date": str(d),
-            "pass": int(p or 0),
-            "fail": int(f or 0),
-        })
+        data.append({"date": str(d), "pass": int(p or 0), "fail": int(f or 0)})
 
     return jsonify(data), 200
+
 
 @app.route("/api/stats/severity", methods=["GET"])
 def stats_severity():
@@ -532,6 +609,9 @@ def stats_severity():
         return jsonify({"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0}), 200
 
 
+# -----------------------------
+# Entrypoint
+# -----------------------------
 if __name__ == "__main__":
     init_db()
     port = int(os.environ.get("PORT", 5000))
