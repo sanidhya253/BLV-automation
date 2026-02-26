@@ -33,11 +33,16 @@ def load_rules():
         return json.load(f)["rules"]
 
 
-def record_fail(rule, reason):
+def record_fail(rule, reason, evidence=None):
     rid = rule.get("rule_id", "UNKNOWN")
     sev = (rule.get("severity") or "LOW").upper()
     print(f"❌ RULE FAILED → {rid} [{sev}] | {reason}")
-    FAILED.append({"rule_id": rid, "severity": sev, "reason": reason})
+    FAILED.append({
+        "rule_id": rid,
+        "severity": sev,
+        "reason": reason,
+        "evidence": evidence or {}
+    })
 
 
 def record_pass(rule):
@@ -56,6 +61,22 @@ def get(endpoint, extra_headers=None):
     if extra_headers:
         h.update(extra_headers)
     return SESSION.get(urljoin(TARGET, endpoint), headers=h, timeout=8)
+
+def safe_text(resp, limit=400):
+    try:
+        t = resp.text or ""
+        t = t.replace("\n", " ").replace("\r", " ").strip()
+        return t[:limit]
+    except Exception:
+        return ""
+
+def build_evidence(endpoint, payload, resp):
+    return {
+        "endpoint": endpoint,
+        "request_payload": payload,
+        "status_code": getattr(resp, "status_code", None),
+        "response_snippet": safe_text(resp),
+    }
 
 
 # =========================================================
@@ -82,7 +103,8 @@ def v_qty_min(rule):
         if r.status_code == 200:
             record_fail(
                 rule,
-                f"Invalid quantity accepted: {case.get('quantity')}"
+                f"Invalid quantity accepted: {case.get('quantity')}",
+                evidence=build_evidence(rule["endpoint"], case, r)
             )
             return
 
@@ -94,7 +116,10 @@ def v_price_positive(rule):
     r = post_json(rule["endpoint"], payload)
 
     if r.status_code == 200:
-        record_fail(rule, "Non-positive price was accepted (expected rejection)")
+        record_fail(rule,
+            "Non-positive price was accepted (expected rejection)",
+            evidence=build_evidence(rule["endpoint"], payload, r)
+        )
         return
     record_pass(rule)
 
@@ -253,7 +278,8 @@ def send_ci_result_to_api():
 
     failed_ids = [x["rule_id"] for x in FAILED]
     failed_reasons = {x["rule_id"]: x["reason"] for x in FAILED}
-
+    failed_evidence = {x["rule_id"]: x.get("evidence", {}) for x in FAILED}
+    
     payload = {
         "run_id": os.getenv("GITHUB_RUN_ID", "local"),
         "commit_sha": os.getenv("GITHUB_SHA", "local"),
@@ -263,10 +289,10 @@ def send_ci_result_to_api():
         "failed_rules": len(FAILED),
         "failed_rule_details": ", ".join(failed_ids) if failed_ids else None,
         "failed_rule_reasons": failed_reasons,
+        "failed_rule_evidence": failed_evidence,   # ✅ NEW
         "total_rules": len(PASSED) + len(FAILED),
         "implemented_rules": len([r for r in (PASSED + FAILED) if r["rule_id"] in DISPATCH]),
     }
-
     try:
         r = requests.post(api_url, json=payload, timeout=10)
         print(f"📡 CI result sent to API → {r.status_code}")
@@ -307,5 +333,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
