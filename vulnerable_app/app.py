@@ -34,11 +34,9 @@ def add_to_cart():
     price = float(data.get("price", 0))
     quantity = int(data.get("quantity", 1))
 
-    # ❌ Vulnerability: silently normalize negative quantity
+    # Vulnerability: silently normalize negative quantity
     if quantity < 0:
-        quantity = abs(quantity)  # converts -5 to 5 instead of rejecting
-
-    # ❌ No explicit validation failure
+        quantity = abs(quantity)
 
     line_total = price * quantity
 
@@ -71,10 +69,7 @@ def apply_coupon():
 
     rate = VALID_COUPONS[code]
 
-    # ❌ Vulnerability 4: Coupon reuse allowed
-    # ❌ Vulnerability 5: Coupon stacking allowed
-    # ❌ No max discount cap
-
+    # Vulnerability: Coupon reuse and stacking allowed
     discount_amount = CART["subtotal"] * rate
     CART["discount"] += discount_amount
     CART["total"] = CART["subtotal"] - CART["discount"]
@@ -90,9 +85,8 @@ def apply_coupon():
 # --------------------------------------------------
 @app.route("/checkout", methods=["POST"])
 def checkout():
-    # ❌ Vulnerability 6: Checkout allowed even if cart empty
-    # ❌ Vulnerability 7: No total validation
-
+    # Vulnerability: Checkout allowed even if cart empty
+    # Vulnerability: No total validation
     order = {
         "items": CART["items"],
         "subtotal": CART["subtotal"],
@@ -100,8 +94,6 @@ def checkout():
         "total": CART["total"],
         "status": "PAID"
     }
-
-    # No cart clearing (race condition prone)
 
     return jsonify({
         "message": "Checkout complete (vulnerable)",
@@ -114,23 +106,24 @@ def checkout():
 # --------------------------------------------------
 @app.route("/admin/report", methods=["GET"])
 def admin_report():
-    # ❌ Vulnerability 8: No authorization check
-
+    # Vulnerability: No authorization check
     return jsonify({
         "report": "Sensitive financial report data",
         "total_sales": CART["total"]
     }), 200
 
+
+# --------------------------------------------------
+# CHECKOUT WITH SHIPPING (INTENTIONALLY VULNERABLE)
+# --------------------------------------------------
 @app.route("/checkout-with-shipping", methods=["POST"])
 def checkout_with_shipping():
     data = request.get_json(silent=True) or {}
 
-    # ❌ Vulnerability: client controls shipping_fee (should be server-side)
+    # Vulnerability: client controls shipping_fee
     shipping_fee = float(data.get("shipping_fee", 0))
-
-    # Pretend subtotal comes from cart
     subtotal = sum(i.get("line_total", 0) for i in CART["items"])
-    total = subtotal + shipping_fee  # attacker can send negative shipping_fee
+    total = subtotal + shipping_fee
 
     return jsonify({
         "subtotal": subtotal,
@@ -154,6 +147,3 @@ def reset():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-
-
-
