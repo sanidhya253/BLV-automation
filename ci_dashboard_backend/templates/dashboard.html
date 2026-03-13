@@ -5,8 +5,6 @@
     <meta charset="UTF-8">
     <title>BLV CI Dashboard</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-
     <style>
         body {
             font-family: Arial, Helvetica, sans-serif;
@@ -14,14 +12,8 @@
             padding: 30px;
         }
 
-        h1 {
-            margin-bottom: 10px;
-        }
-
-        .subtitle {
-            color: #555;
-            margin-bottom: 20px;
-        }
+        h1 { margin-bottom: 10px; }
+        .subtitle { color: #555; margin-bottom: 20px; }
 
         .summary {
             display: flex;
@@ -38,15 +30,8 @@
             min-width: 200px;
         }
 
-        .card h2 {
-            margin: 0;
-            font-size: 28px;
-        }
-
-        .card p {
-            margin: 6px 0 0;
-            color: #666;
-        }
+        .card h2 { margin: 0; font-size: 28px; }
+        .card p { margin: 6px 0 0; color: #666; }
 
         .toolbar {
             display: flex;
@@ -57,10 +42,7 @@
             gap: 12px;
         }
 
-        .hint {
-            color: #6b7280;
-            font-size: 13px;
-        }
+        .hint { color: #6b7280; font-size: 13px; }
 
         table {
             width: 100%;
@@ -71,8 +53,7 @@
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
         }
 
-        th,
-        td {
+        th, td {
             padding: 12px 14px;
             text-align: left;
             border-bottom: 1px solid #eee;
@@ -85,9 +66,7 @@
             font-weight: normal;
         }
 
-        tr:hover {
-            background-color: #f9fafb;
-        }
+        tr:hover { background-color: #f9fafb; }
 
         .status-pass {
             color: #166534;
@@ -107,9 +86,7 @@
             display: inline-block;
         }
 
-        .mono {
-            font-family: monospace;
-        }
+        .mono { font-family: monospace; }
 
         .report-links a {
             text-decoration: none;
@@ -122,9 +99,7 @@
             background: #ffffff;
         }
 
-        .report-links a:hover {
-            background: #f3f4f6;
-        }
+        .report-links a:hover { background: #f3f4f6; }
 
         footer {
             margin-top: 30px;
@@ -149,18 +124,16 @@
         {% set ns.fail_count = ns.fail_count + 1 %}
       {% endif %}
     {% endfor %}
-    
+
     <div class="summary">
       <div class="card">
         <h2>{{ results|length }}</h2>
         <p>Total CI Runs</p>
       </div>
-    
       <div class="card">
         <h2>{{ ns.fail_count }}</h2>
         <p>Failed Runs</p>
       </div>
-    
       <div class="card">
         <h2>{{ results|length - ns.fail_count }}</h2>
         <p>Successful Runs</p>
@@ -168,7 +141,6 @@
     </div>
 
     <div class="summary" style="align-items: flex-start;">
-      <!-- LEFT: Trend -->
       <div class="card" style="flex: 2; min-width: 520px;">
         <h2 style="font-size:15px; margin:0 0 10px 0;">Trend (Last 14 Days)</h2>
         <div style="width: 100%; height: 260px;">
@@ -178,8 +150,7 @@
           Daily CI outcomes (PASS vs FAIL)
         </p>
       </div>
-    
-      <!-- RIGHT: Severity chart -->
+
       <div class="card" style="flex: 1; min-width: 320px;">
         <h2 style="font-size:15px; margin:0 0 10px 0;">Failure Severity (Last 14 Days)</h2>
         <div style="width: 100%; height: 260px;">
@@ -191,16 +162,12 @@
       </div>
     </div>
 
-
-
-
     <div class="toolbar">
         <div class="hint">
             Tip: Use <b>PDF/JSON</b> to view full scan details for each run.
         </div>
     </div>
 
-    <!-- TABLE (MINIMAL VIEW) -->
     <table>
         <thead>
             <tr>
@@ -212,18 +179,12 @@
                 <th>Time</th>
             </tr>
         </thead>
-
         <tbody>
             {% for row in results %}
             <tr>
                 <td class="mono">{{ row[0] }}</td>
-
-                <td class="mono">
-                    {{ row[1][:10] }}
-                </td>
-
+                <td class="mono">{{ row[1][:10] }}</td>
                 <td>{{ row[2] }}</td>
-
                 <td>
                     {% if row[3] and row[3]|trim|upper == "PASS" %}
                         <span class="status-pass">PASS</span>
@@ -231,97 +192,72 @@
                         <span class="status-fail">FAIL</span>
                     {% endif %}
                 </td>
-
                 <td class="report-links">
                     <a href="/report/{{ row[0] }}.json">JSON</a>
                     &nbsp;
                     <a href="/report/{{ row[0] }}.pdf">PDF</a>
                 </td>
-
                 <td>{{ row[7] }}</td>
             </tr>
             {% endfor %}
         </tbody>
-
     </table>
 
     <footer>
-        BLV Automation Framework · CI/CD Business Logic Monitoring
+        BLV Automation Framework &middot; CI/CD Business Logic Monitoring
     </footer>
-
 
     <script>
       async function renderTrendChart() {
         try {
           const res = await fetch('/api/stats/daily');
           const data = await res.json();
-    
-          const labels = data.map(x => x.date);
-          const passSeries = data.map(x => x.pass);
-          const failSeries = data.map(x => x.fail);
-    
           const ctx = document.getElementById('trendChart').getContext('2d');
-    
           new Chart(ctx, {
             type: 'line',
             data: {
-              labels: labels,
+              labels: data.map(x => x.date),
               datasets: [
-                { label: 'PASS', data: passSeries, tension: 0.3 },
-                { label: 'FAIL', data: failSeries, tension: 0.3 }
+                { label: 'PASS', data: data.map(x => x.pass), tension: 0.3,
+                  borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)' },
+                { label: 'FAIL', data: data.map(x => x.fail), tension: 0.3,
+                  borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)' }
               ]
             },
             options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: { position: 'bottom' }
-              },
-              scales: {
-                y: { beginAtZero: true, ticks: { precision: 0 } }
-              }
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { position: 'bottom' } },
+              scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
             }
           });
-        } catch (e) {
-          console.log("Trend chart error:", e);
-        }
+        } catch (e) { console.log("Trend chart error:", e); }
       }
-    
       renderTrendChart();
-
 
       async function renderSeverityChart() {
         try {
           const res = await fetch('/api/stats/severity');
           const counts = await res.json();
-    
           const labels = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
-          const values = labels.map(k => counts[k] || 0);
-    
           const ctx = document.getElementById('severityChart').getContext('2d');
           new Chart(ctx, {
             type: 'doughnut',
             data: {
               labels: labels,
               datasets: [{
-                data: values,
+                data: labels.map(k => counts[k] || 0),
+                backgroundColor: ['#dc2626','#f97316','#eab308','#22c55e'],
                 borderWidth: 1
               }]
             },
             options: {
-              responsive: true,
-              maintainAspectRatio: false,
-              plugins: {
-                legend: { position: 'bottom' }
-              },
+              responsive: true, maintainAspectRatio: false,
+              plugins: { legend: { position: 'bottom' } },
               cutout: '65%'
             }
           });
-        } catch (e) {
-          console.log("Severity chart error:", e);
-        }
+        } catch (e) { console.log("Severity chart error:", e); }
       }
-    
       renderSeverityChart();
     </script>
 
