@@ -143,9 +143,13 @@ def init_db():
     ]
     for col_name, col_type in new_cols:
         try:
-            cur.execute(f"ALTER TABLE ci_results ADD COLUMN {col_name} {col_type}")
+            if DATABASE_URL:
+                cur.execute(f"ALTER TABLE ci_results ADD COLUMN IF NOT EXISTS {col_name} {col_type}")
+            else:
+                cur.execute(f"ALTER TABLE ci_results ADD COLUMN {col_name} {col_type}")
         except Exception:
-            pass
+            if DATABASE_URL:
+                conn.rollback()
 
     conn.commit()
     conn.close()
