@@ -55,7 +55,7 @@ jobs:
       - name: Run vulnerable app container
         run: |
           docker rm -f vuln_app || true
-          docker run -d -p 5000:5000 --name vuln_app vulnerable-app
+          docker run -d -p 5000:5000 -e APP_MODE=fixed --name vuln_app vulnerable-app
       - name: Wait for vulnerable app to be ready
         run: |
           for i in {1..30}; do
