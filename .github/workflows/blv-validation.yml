@@ -1,5 +1,4 @@
 name: BLV Validation Pipeline
-
 on:
   push:
     branches: ["main"]
@@ -9,10 +8,12 @@ on:
 jobs:
   blv-validation:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -20,12 +21,10 @@ jobs:
           python-version: "3.10"
 
       - name: Install BLV validator dependencies
-        run: |
-          pip install requests
+        run: pip install requests
 
       - name: Build vulnerable app Docker image
-        run: |
-          docker build -t vulnerable-app ./vulnerable_app
+        run: docker build -t vulnerable-app ./vulnerable_app
 
       - name: Run vulnerable app container
         run: |
@@ -37,26 +36,50 @@ jobs:
           echo "Waiting for app..."
           for i in {1..30}; do
             if curl -fsS http://127.0.0.1:5000/health > /dev/null; then
-              echo "App is ready ✅"
+              echo "App is ready"
               exit 0
             fi
             echo "Still waiting... ($i)"
             sleep 1
           done
-
-          echo "App did not become ready ❌"
-          echo "---- Container logs ----"
+          echo "App did not become ready"
           docker logs vuln_app || true
           exit 1
 
       - name: Run BLV Validator
         env:
           CI_RESULT_API: https://blv-automation-production.up.railway.app/api/ci-results
-        run: |
-          python blv_rule_validator.py http://127.0.0.1:5000
+        run: python blv_rule_validator.py http://127.0.0.1:5000
 
       - name: Show container logs (always)
         if: always()
+        run: docker logs vuln_app || true
+
+  revert-on-failure:
+    name: "Auto-Revert Failed Commit"
+    runs-on: ubuntu-latest
+    needs: blv-validation
+    if: failure() && github.event_name == 'push'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
         run: |
-          echo "---- Final container logs ----"
-          docker logs vuln_app || true
+          git config user.name "BLV Security Bot"
+          git config user.email "blv-bot@security.local"
+
+      - name: Revert the failed commit
+        run: |
+          echo "============================================"
+          echo "  BLV SECURITY GATE - AUTO REVERT"
+          echo "============================================"
+          echo "  Quality Gate FAILED for: ${{ github.sha }}"
+          echo "  Reverting to maintain secure codebase..."
+          git revert --no-edit HEAD
+          git push origin main
+          echo "  Commit REVERTED successfully"
+          echo "============================================"
