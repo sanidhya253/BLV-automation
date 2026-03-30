@@ -15,6 +15,8 @@ services:
     build:
       context: ./vulnerable_app
     container_name: blv-vulnerable-app
+    environment:
+      - APP_MODE=fixed
     ports:
       - "5000:5000"
     healthcheck:
