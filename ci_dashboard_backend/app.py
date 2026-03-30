@@ -964,42 +964,6 @@ def stats_rule_frequency():
     except Exception as e:
         print("Rule frequency error:", e)
         return jsonify([]), 200
-@app.route("/api/stats/rule-frequency", methods=["GET"])
-def stats_rule_frequency():
-    try:
-        rules_idx = load_rules_index()
-        conn = get_db()
-        cur = conn.cursor()
-        cur.execute("""
-            SELECT failed_rule_details FROM ci_results
-            WHERE failed_rule_details IS NOT NULL
-        """)
-        rows = cur.fetchall()
-        conn.close()
-
-        fail_counts = {}
-        for (details,) in rows:
-            if not details:
-                continue
-            for rid in str(details).split(","):
-                rid = rid.strip()
-                if not rid:
-                    continue
-                fail_counts[rid] = fail_counts.get(rid, 0) + 1
-
-        result = []
-        for rid, info in sorted(rules_idx.items()):
-            result.append({
-                "rule_id": rid,
-                "name": info.get("name", ""),
-                "severity": info.get("severity", "LOW"),
-                "fail_count": fail_counts.get(rid, 0)
-            })
-
-        return jsonify(result), 200
-    except Exception as e:
-        print("Rule frequency error:", e)
-        return jsonify([]), 200
 
 # -----------------------------
 # Entrypoint
