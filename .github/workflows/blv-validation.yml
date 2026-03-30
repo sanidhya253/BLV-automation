@@ -1,13 +1,54 @@
-name: BLV Validation Pipeline
+name: BLV Security Pipeline v2.0
+
 on:
   push:
     branches: ["main"]
   pull_request:
     branches: ["main"]
 
+# TOGGLE THIS: set to true to enable auto-revert, false to disable
+env:
+  AUTO_REVERT_ENABLED: "true"
+
 jobs:
-  blv-validation:
+  # ─────────────────────────────────────────
+  # STAGE 1: SAST — Semgrep Static Analysis
+  # ─────────────────────────────────────────
+  sast-scan:
+    name: "SAST — Semgrep Static Analysis"
     runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run BLV Semgrep SAST Scan
+        env:
+          CI_RESULT_API: https://blv-automation-production.up.railway.app/api/ci-results
+        run: python blv_semgrep_runner.py ./vulnerable_app
+        continue-on-error: true
+
+      - name: Upload SAST Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-sast-report
+          path: semgrep-report.json
+
+  # ─────────────────────────────────────────
+  # STAGE 2: DAST — Dynamic Validator
+  # ─────────────────────────────────────────
+  dast-scan:
+    name: "DAST — BLV Dynamic Validator"
+    runs-on: ubuntu-latest
+    needs: sast-scan
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -46,7 +87,7 @@ jobs:
           docker logs vuln_app || true
           exit 1
 
-      - name: Run BLV Validator
+      - name: Run BLV DAST Validator
         env:
           CI_RESULT_API: https://blv-automation-production.up.railway.app/api/ci-results
         run: python blv_rule_validator.py http://127.0.0.1:5000
@@ -55,31 +96,50 @@ jobs:
         if: always()
         run: docker logs vuln_app || true
 
+  # ─────────────────────────────────────────
+  # STAGE 3: Auto-Revert if DAST Failed
+  # ─────────────────────────────────────────
   revert-on-failure:
     name: "Auto-Revert Failed Commit"
     runs-on: ubuntu-latest
-    needs: blv-validation
+    needs: dast-scan
     if: failure() && github.event_name == 'push'
     steps:
+      - name: Check if auto-revert is enabled
+        run: |
+          if [ "${{ env.AUTO_REVERT_ENABLED }}" != "true" ]; then
+            echo "Auto-revert is DISABLED. Skipping."
+            exit 0
+          fi
+          echo "Auto-revert is ENABLED. Proceeding..."
+
       - name: Checkout repository
+        if: env.AUTO_REVERT_ENABLED == 'true'
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure git
+        if: env.AUTO_REVERT_ENABLED == 'true'
         run: |
           git config user.name "BLV Security Bot"
           git config user.email "blv-bot@security.local"
 
       - name: Revert the failed commit
+        if: env.AUTO_REVERT_ENABLED == 'true'
         run: |
           echo "============================================"
           echo "  BLV SECURITY GATE - AUTO REVERT"
           echo "============================================"
-          echo "  Quality Gate FAILED for: ${{ github.sha }}"
+          echo ""
+          echo "  Quality Gate FAILED"
+          echo "  Commit: ${{ github.sha }}"
           echo "  Reverting to maintain secure codebase..."
+          echo ""
           git revert --no-edit HEAD
           git push origin main
-          echo "  Commit REVERTED successfully"
+          echo ""
+          echo "  REVERTED successfully"
+          echo "  Fix vulnerabilities and push again"
           echo "============================================"
