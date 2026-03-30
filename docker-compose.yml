@@ -1,0 +1,96 @@
+# =============================================================
+# BLV Automation Framework v2.0 - Docker Compose
+# =============================================================
+# Usage:
+#   docker compose up --build -d       → Start vulnerable app + dashboard
+#   docker compose run semgrep         → Run SAST scan (Semgrep)
+#   docker compose run validator       → Run DAST scan (Rule Validator)
+#   docker compose down                → Stop everything
+# =============================================================
+
+services:
+  # ── 1. Vulnerable Demo App ──────────────────────────────────
+  # Intentionally vulnerable e-commerce API for testing
+  vulnerable-app:
+    build:
+      context: ./vulnerable_app
+    container_name: blv-vulnerable-app
+    ports:
+      - "5000:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - blv-network
+
+  # ── 2. CI Dashboard ────────────────────────────────────────
+  # Web dashboard showing scan results, trends, and PDF reports
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: blv-dashboard
+    ports:
+      - "8080:8080"
+    volumes:
+      - dashboard-data:/app/data
+    environment:
+      - PORT=8080
+    depends_on:
+      vulnerable-app:
+        condition: service_healthy
+    networks:
+      - blv-network
+
+  # ── 3. BLV Rule Validator (DAST) ───────────────────────────
+  # Dynamic testing: sends requests to running app
+  # Usage: docker compose run validator
+  validator:
+    build:
+      context: .
+      dockerfile: Dockerfile.validator
+    container_name: blv-validator
+    environment:
+      - CI_RESULT_API=http://dashboard:8080/api/ci-results
+      - GITHUB_RUN_ID=docker-local
+      - GITHUB_SHA=local-build
+      - GITHUB_REF_NAME=local
+    depends_on:
+      vulnerable-app:
+        condition: service_healthy
+    networks:
+      - blv-network
+    command: ["http://vulnerable-app:5000"]
+    profiles:
+      - scan
+
+  # ── 4. Semgrep SAST Scanner ────────────────────────────────
+  # Static analysis: scans source code without running the app
+  # Usage: docker compose run semgrep
+  semgrep:
+    build:
+      context: .
+      dockerfile: Dockerfile.semgrep
+    container_name: blv-semgrep
+    volumes:
+      - ./vulnerable_app:/scan/vulnerable_app:ro
+    environment:
+      - CI_RESULT_API=http://dashboard:8080/api/ci-results
+      - GITHUB_RUN_ID=sast-local
+      - GITHUB_SHA=local-build
+      - GITHUB_REF_NAME=local
+    networks:
+      - blv-network
+    command: ["/scan/vulnerable_app"]
+    profiles:
+      - scan
+
+volumes:
+  dashboard-data:
+
+networks:
+  blv-network:
+    driver: bridge

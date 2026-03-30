@@ -1,0 +1,9 @@
+FROM python:3.11-slim
+WORKDIR /app
+
+RUN pip install --no-cache-dir requests
+
+COPY blv_rule_validator.py .
+COPY rules/ ./rules/
+
+ENTRYPOINT ["python", "blv_rule_validator.py"]

@@ -1,60 +1,149 @@
 {
   "framework": "Business Logic Security Automation Framework",
-  "version": "1.1",
+  "version": "2.0",
+
+  "quality_gate": {
+    "enabled": true,
+    "thresholds": {
+      "CRITICAL": 0,
+      "HIGH": 0,
+      "MEDIUM": 3,
+      "LOW": 5
+    },
+    "min_security_score": 60,
+    "block_on_regression": true
+  },
+
   "rules": [
     {
       "rule_id": "BLV-QTY-001",
       "name": "Quantity must be >= 1",
+      "category": "Input Validation",
       "endpoint": "/add-to-cart",
-      "severity": "HIGH"
+      "method": "POST",
+      "severity": "HIGH",
+      "description": "The application must reject add-to-cart requests with quantity less than 1, including negative, zero, and non-numeric values.",
+      "expected_behavior": {
+        "reject_status_codes": [400, 422],
+        "quantity_minimum": 1
+      },
+      "test_payloads": [
+        {"product_id": 1, "price": 100, "quantity": -1, "expect": "reject", "label": "Negative quantity"},
+        {"product_id": 1, "price": 100, "quantity": 0, "expect": "reject", "label": "Zero quantity"},
+        {"product_id": 1, "price": 100, "quantity": "-1", "expect": "reject", "label": "Negative as string"},
+        {"product_id": 1, "price": 100, "quantity": " -5 ", "expect": "reject", "label": "Negative with spaces"},
+        {"product_id": 1, "price": 100, "quantity": 1000000000, "expect": "reject", "label": "Extremely large quantity"},
+        {"product_id": 1, "price": 100, "expect": "reject", "label": "Missing quantity field"}
+      ]
     },
     {
       "rule_id": "BLV-PRICE-001",
       "name": "Price must be > 0",
+      "category": "Input Validation",
       "endpoint": "/add-to-cart",
-      "severity": "HIGH"
+      "method": "POST",
+      "severity": "HIGH",
+      "description": "The application must reject add-to-cart requests where the price is zero or negative to prevent free or credit-generating purchases.",
+      "expected_behavior": {
+        "reject_status_codes": [400, 422],
+        "price_minimum": 0.01
+      },
+      "test_payloads": [
+        {"product_id": 1, "price": -50, "quantity": 1, "expect": "reject", "label": "Negative price"},
+        {"product_id": 1, "price": 0, "quantity": 1, "expect": "reject", "label": "Zero price"},
+        {"product_id": 1, "price": -0.01, "quantity": 1, "expect": "reject", "label": "Slightly negative price"}
+      ]
     },
     {
       "rule_id": "BLV-QTY-002",
       "name": "Quantity upper bound enforced",
+      "category": "Input Validation",
       "endpoint": "/add-to-cart",
+      "method": "POST",
       "severity": "HIGH",
-      "expected_behavior": { "quantity_maximum": 10 }
+      "description": "The application must enforce a reasonable maximum quantity per item to prevent inventory manipulation and abuse.",
+      "expected_behavior": {
+        "quantity_maximum": 10,
+        "reject_status_codes": [400, 422]
+      },
+      "test_payloads": [
+        {"product_id": 1, "price": 100, "quantity": 1009, "expect": "reject", "label": "Exceeds maximum by 999"},
+        {"product_id": 1, "price": 100, "quantity": 99999, "expect": "reject", "label": "Extremely over limit"}
+      ]
     },
     {
       "rule_id": "BLV-CPN-001",
       "name": "Single-use coupon enforcement",
+      "category": "Coupon & Discount",
       "endpoint": "/apply-coupon",
+      "method": "POST",
       "severity": "HIGH",
-      "expected_behavior": { "coupon_reuse_allowed": false }
+      "description": "Coupons marked as single-use must be rejected on second application to prevent unlimited discount redemption.",
+      "expected_behavior": {
+        "coupon_reuse_allowed": false
+      },
+      "test_payloads": [
+        {"coupon_code": "SAVE10", "expect": "accept", "label": "First use (should work)"},
+        {"coupon_code": "SAVE10", "expect": "reject", "label": "Second use (should be blocked)"}
+      ],
+      "preconditions": [
+        {"endpoint": "/add-to-cart", "method": "POST", "payload": {"product_id": 1, "price": 100, "quantity": 1}}
+      ]
     },
     {
       "rule_id": "BLV-CPN-002",
       "name": "Coupon stacking prevention (cap total discount)",
+      "category": "Coupon & Discount",
       "endpoint": "/apply-coupon",
+      "method": "POST",
       "severity": "MEDIUM",
-      "expected_behavior": { "max_discount_rate": 0.30 }
+      "description": "Total discount from combined coupons must not exceed the defined maximum discount rate to prevent excessive price reduction.",
+      "expected_behavior": {
+        "max_discount_rate": 0.30
+      }
     },
     {
       "rule_id": "BLV-WF-001",
       "name": "Checkout requires cart items and valid total",
+      "category": "Workflow Integrity",
       "endpoint": "/checkout",
-      "severity": "CRITICAL"
+      "method": "POST",
+      "severity": "CRITICAL",
+      "description": "Checkout must fail if the cart is empty or the total is invalid, preventing payment bypass and zero-cost orders.",
+      "expected_behavior": {
+        "empty_cart_allowed": false,
+        "negative_total_allowed": false
+      }
     },
     {
       "rule_id": "BLV-AUTH-001",
       "name": "Admin endpoint requires admin role",
+      "category": "Authorization",
       "endpoint": "/admin/report",
-      "severity": "CRITICAL"
+      "method": "GET",
+      "severity": "CRITICAL",
+      "description": "Administrative endpoints must verify user role before granting access. Unauthenticated or non-admin users must receive 401 or 403.",
+      "expected_behavior": {
+        "unauthenticated_status": [401, 403],
+        "required_role": "admin"
+      }
     },
     {
       "rule_id": "BLV-SHIP-001",
       "name": "Shipping Fee Integrity Validation",
+      "category": "Input Validation",
       "endpoint": "/checkout-with-shipping",
+      "method": "POST",
+      "severity": "MEDIUM",
+      "description": "Shipping fees must be calculated server-side. Client-supplied shipping values (especially negative) must be rejected to prevent total price manipulation.",
       "expected_behavior": {
-        "shipping_fee_editable": false
+        "shipping_fee_editable": false,
+        "reject_negative_shipping": true
       },
-      "severity": "MEDIUM"
+      "test_payloads": [
+        {"shipping_fee": -50, "expect": "reject", "label": "Negative shipping fee"},
+        {"shipping_fee": 0, "expect": "reject", "label": "Zero shipping (should be server-calculated)"}
+      ]
     }
   ]
 }

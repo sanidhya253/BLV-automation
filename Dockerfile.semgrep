@@ -1,0 +1,9 @@
+FROM python:3.11-slim
+WORKDIR /app
+
+RUN pip install --no-cache-dir semgrep requests
+
+COPY blv_semgrep_runner.py .
+COPY semgrep-rules/ ./semgrep-rules/
+
+ENTRYPOINT ["python", "blv_semgrep_runner.py"]

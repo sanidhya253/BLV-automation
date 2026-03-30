@@ -1,0 +1,90 @@
+#!/bin/bash
+# ============================================================
+# BLV Pre-Push Hook
+# Runs SAST + DAST scan before allowing git push
+# If quality gate FAILS → push is BLOCKED
+# If quality gate PASSES → push goes through
+# ============================================================
+
+echo ""
+echo "============================================================"
+echo "  BLV Pre-Push Security Gate"
+echo "  Running security scan before push..."
+echo "============================================================"
+echo ""
+
+# Check if Docker is running
+if ! docker info > /dev/null 2>&1; then
+    echo "[ERROR] Docker is not running. Start Docker first."
+    echo "[BLOCKED] Push blocked — cannot run security scan."
+    exit 1
+fi
+
+# Step 1: Start services
+echo "[1/4] Starting services..."
+sudo docker-compose up --build -d vulnerable-app dashboard > /dev/null 2>&1
+
+# Wait for app to be ready
+echo "[2/4] Waiting for application..."
+for i in {1..30}; do
+    if curl -fsS http://127.0.0.1:5000/health > /dev/null 2>&1; then
+        break
+    fi
+    sleep 2
+done
+
+# Wait for dashboard
+for i in {1..15}; do
+    if curl -fsS http://127.0.0.1:8080/health > /dev/null 2>&1; then
+        break
+    fi
+    sleep 2
+done
+
+# Step 2: Run SAST scan
+echo "[3/4] Running SAST scan (Semgrep)..."
+SAST_RESULT=0
+sudo docker-compose run --rm semgrep > /tmp/blv-sast-output.txt 2>&1
+SAST_RESULT=$?
+
+if [ $SAST_RESULT -ne 0 ]; then
+    echo ""
+    echo "  SAST scan found HIGH/CRITICAL issues in source code"
+    cat /tmp/blv-sast-output.txt | grep -E "\[FAIL\]|\[!!|\[BLOCKED"
+    echo ""
+fi
+
+# Step 3: Run DAST scan
+echo "[4/4] Running DAST scan (Validator)..."
+DAST_OUTPUT=$(sudo docker-compose run --rm validator 2>&1)
+DAST_RESULT=$?
+
+# Show summary
+echo ""
+echo "$DAST_OUTPUT" | grep -E "Security Score|Rules Passed|Rules Failed|QUALITY GATE|CI/CD"
+echo ""
+
+# Stop services
+sudo docker-compose down > /dev/null 2>&1
+
+# Step 4: Decision
+if [ $DAST_RESULT -ne 0 ]; then
+    echo "============================================================"
+    echo "  PUSH BLOCKED"
+    echo "  Quality Gate FAILED — fix vulnerabilities before pushing"
+    echo "============================================================"
+    echo ""
+    echo "  Failed rules:"
+    echo "$DAST_OUTPUT" | grep -E "\[FAIL\]"
+    echo ""
+    echo "  Fix the issues and try again: git push"
+    echo ""
+    exit 1
+fi
+
+echo "============================================================"
+echo "  PUSH ALLOWED"
+echo "  Quality Gate PASSED — code is secure"
+echo "============================================================"
+echo ""
+exit 0

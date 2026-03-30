@@ -1,0 +1,200 @@
+rules:
+
+  # ─────────────────────────────────────────────────────
+  # BLV-QTY-001: Negative quantity silently normalized
+  # Detects abs() used on user input instead of rejecting
+  # ─────────────────────────────────────────────────────
+  - id: blv-qty-001-negative-quantity-normalization
+    patterns:
+      - pattern: |
+          $QUANTITY = abs($QUANTITY)
+    message: >
+      BLV-QTY-001 [HIGH]: Negative quantity is silently converted using abs() instead
+      of being rejected. This allows attackers to submit negative quantities that get
+      normalized, bypassing input validation. Fix: return a 400 error when quantity < 1
+      instead of normalizing the value.
+    severity: WARNING
+    languages: [python]
+    metadata:
+      blv_rule_id: BLV-QTY-001
+      blv_severity: HIGH
+      category: Input Validation
+      cwe: "CWE-20: Improper Input Validation"
+      impact: "Attackers can manipulate cart totals by submitting negative quantities"
+      fix: "Replace abs() normalization with explicit rejection (return 400 status)"
+
+  # ─────────────────────────────────────────────────────
+  # BLV-PRICE-001: No price validation
+  # Detects price taken from user input without validation
+  # ─────────────────────────────────────────────────────
+  - id: blv-price-001-client-controlled-price
+    patterns:
+      - pattern: |
+          $PRICE = float(data.get("price", ...))
+      - pattern-not-inside: |
+          if $PRICE <= 0:
+              ...
+    message: >
+      BLV-PRICE-001 [HIGH]: Price is taken directly from client input without
+      server-side validation. Attackers can submit negative or zero prices to get
+      items for free or generate store credit. Fix: validate that price > 0 and
+      compare against server-side product catalog price.
+    severity: WARNING
+    languages: [python]
+    metadata:
+      blv_rule_id: BLV-PRICE-001
+      blv_severity: HIGH
+      category: Input Validation
+      cwe: "CWE-20: Improper Input Validation"
+      impact: "Attackers can purchase items for free or generate credit"
+      fix: "Add server-side price validation: reject if price <= 0"
+
+  # ─────────────────────────────────────────────────────
+  # BLV-CPN-001: No coupon reuse tracking
+  # Detects coupon application without checking used coupons
+  # ─────────────────────────────────────────────────────
+  - id: blv-cpn-001-coupon-reuse-allowed
+    patterns:
+      - pattern: |
+          $DISCOUNT += ...
+      - pattern-not-inside: |
+          if $CODE in $USED_COUPONS:
+              ...
+    message: >
+      BLV-CPN-001 [HIGH]: Discount is applied without tracking whether the coupon
+      has already been used. This allows unlimited coupon reuse, leading to excessive
+      discounts. Fix: maintain a set of used coupon codes per session/user and reject
+      duplicate applications.
+    severity: WARNING
+    languages: [python]
+    metadata:
+      blv_rule_id: BLV-CPN-001
+      blv_severity: HIGH
+      category: Coupon & Discount
+      cwe: "CWE-799: Improper Control of Interaction Frequency"
+      impact: "Attackers can apply the same coupon repeatedly for unlimited discounts"
+      fix: "Track used coupons and reject reuse attempts"
+
+  # ─────────────────────────────────────────────────────
+  # BLV-CPN-002: No discount cap enforcement
+  # Detects discount accumulation without maximum check
+  # ─────────────────────────────────────────────────────
+  - id: blv-cpn-002-no-discount-cap
+    patterns:
+      - pattern: |
+          $CART["discount"] += $AMOUNT
+      - pattern-not-inside: |
+          if $CART["discount"] > ...:
+              ...
+    message: >
+      BLV-CPN-002 [MEDIUM]: Discount is accumulated without checking against a
+      maximum cap. Multiple coupons can be stacked to reduce the total below zero.
+      Fix: enforce a maximum discount rate (e.g., 30% of subtotal) before applying.
+    severity: WARNING
+    languages: [python]
+    metadata:
+      blv_rule_id: BLV-CPN-002
+      blv_severity: MEDIUM
+      category: Coupon & Discount
+      cwe: "CWE-840: Business Logic Errors"
+      impact: "Attackers can stack coupons to get items for free"
+      fix: "Add a maximum discount cap check before applying discount"
+
+  # ─────────────────────────────────────────────────────
+  # BLV-WF-001: Checkout without cart validation
+  # Detects checkout endpoint that doesn't check cart state
+  # ─────────────────────────────────────────────────────
+  - id: blv-wf-001-checkout-no-cart-validation
+    patterns:
+      - pattern: |
+          @app.route("/checkout", ...)
+          def $FUNC():
+              ...
+      - pattern-not-inside: |
+          if not $CART["items"]:
+              ...
+    message: >
+      BLV-WF-001 [CRITICAL]: Checkout endpoint does not verify that the cart contains
+      items before processing payment. Attackers can complete checkout with an empty
+      cart or manipulated totals. Fix: validate that cart has items and total > 0
+      before processing the order.
+    severity: ERROR
+    languages: [python]
+    metadata:
+      blv_rule_id: BLV-WF-001
+      blv_severity: CRITICAL
+      category: Workflow Integrity
+      cwe: "CWE-840: Business Logic Errors"
+      impact: "Attackers can complete orders without items or with zero total"
+      fix: "Add cart validation: reject checkout if cart is empty or total <= 0"
+
+  # ─────────────────────────────────────────────────────
+  # BLV-AUTH-001: Admin endpoint without authorization
+  # Detects admin routes that don't check user role
+  # ─────────────────────────────────────────────────────
+  - id: blv-auth-001-admin-no-authorization
+    patterns:
+      - pattern: |
+          @app.route("/admin/...", ...)
+          def $FUNC():
+              ...
+      - pattern-not-inside: |
+          if ... != "admin":
+              ...
+    message: >
+      BLV-AUTH-001 [CRITICAL]: Admin endpoint is accessible without any authorization
+      check. Any user can access sensitive administrative data. Fix: verify user role
+      from session/token and return 401/403 for unauthorized requests.
+    severity: ERROR
+    languages: [python]
+    metadata:
+      blv_rule_id: BLV-AUTH-001
+      blv_severity: CRITICAL
+      category: Authorization
+      cwe: "CWE-862: Missing Authorization"
+      impact: "Any unauthenticated user can access sensitive admin data"
+      fix: "Add role-based authorization check before returning admin data"
+
+  # ─────────────────────────────────────────────────────
+  # BLV-SHIP-001: Client-controlled shipping fee
+  # Detects shipping fee taken from user input
+  # ─────────────────────────────────────────────────────
+  - id: blv-ship-001-client-controlled-shipping
+    patterns:
+      - pattern: |
+          $FEE = float(data.get("shipping_fee", ...))
+    message: >
+      BLV-SHIP-001 [MEDIUM]: Shipping fee is taken directly from client input instead
+      of being calculated server-side. Attackers can send negative shipping fees to
+      reduce the order total. Fix: calculate shipping fee on the server based on
+      order weight, destination, and shipping method.
+    severity: WARNING
+    languages: [python]
+    metadata:
+      blv_rule_id: BLV-SHIP-001
+      blv_severity: MEDIUM
+      category: Input Validation
+      cwe: "CWE-472: External Control of Assumed-Immutable Web Parameter"
+      impact: "Attackers can manipulate shipping fee to reduce total price"
+      fix: "Calculate shipping fee server-side, ignore client-supplied value"
+
+  # ─────────────────────────────────────────────────────
+  # GENERAL: Sensitive data exposed without auth
+  # ─────────────────────────────────────────────────────
+  - id: blv-general-sensitive-data-no-auth
+    patterns:
+      - pattern: |
+          return jsonify({..., "report": ..., ...})
+      - pattern-not-inside: |
+          if request.headers.get(...) == ...:
+              ...
+    message: >
+      BLV-GENERAL [HIGH]: Sensitive data (report) is returned in a response without
+      verifying authentication or authorization. Fix: add authentication middleware
+      or check user credentials before returning sensitive data.
+    severity: WARNING
+    languages: [python]
+    metadata:
+      blv_severity: HIGH
+      category: Authorization
+      cwe: "CWE-200: Exposure of Sensitive Information"
