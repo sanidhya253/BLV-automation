@@ -134,7 +134,7 @@ def init_db():
     new_cols = [
         ("security_score", "REAL DEFAULT 0"),
         ("score_grade", "TEXT DEFAULT 'F'"),
-        ("quality_gate_passed", "BOOLEAN DEFAULT 0"),
+        ("quality_gate_passed", "BOOLEAN DEFAULT FALSE"),
         ("quality_gate_reasons", "TEXT"),
         ("regressions", "TEXT"),
         ("fixed_rules", "TEXT"),
@@ -143,13 +143,10 @@ def init_db():
     ]
     for col_name, col_type in new_cols:
         try:
-            if DATABASE_URL:
-                cur.execute(f"ALTER TABLE ci_results ADD COLUMN IF NOT EXISTS {col_name} {col_type}")
-            else:
-                cur.execute(f"ALTER TABLE ci_results ADD COLUMN {col_name} {col_type}")
+            cur.execute(f"ALTER TABLE ci_results ADD COLUMN IF NOT EXISTS {col_name} {col_type}")
+            conn.commit()
         except Exception:
-            if DATABASE_URL:
-                conn.rollback()
+            conn.rollback()
 
     conn.commit()
     conn.close()
