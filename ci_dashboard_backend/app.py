@@ -1,15 +1,20 @@
 from io import BytesIO
 import os
 import json
+import secrets
 import sqlite3
 
-from flask import Flask, request, jsonify, render_template, send_file
+from flask import Flask, request, jsonify, render_template, send_file, session
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import cm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+
+# ─── Auth module ─────────────────────────────────────────────────────────────
+from github_auth import register_auth_routes, login_required, AUTH_ENABLED
 
 # -----------------------------
 # Paths
@@ -25,6 +30,15 @@ if DATABASE_URL:
     import psycopg2
 
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"))
+
+# ─── Proxy fix (Railway terminates SSL, so Flask needs to trust proxy headers) ─
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+
+# ─── Session config (required for OAuth) ─────────────────────────────────────
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
+
+# ─── Register auth routes (/login, /auth/github, /auth/callback, /auth/logout)
+register_auth_routes(app)
 
 
 # -----------------------------
@@ -280,10 +294,16 @@ def build_comparison(current_row, previous_row, rules_idx):
     }
 
 
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
 # API routes
-# -----------------------------
+# ─────────────────────────────────────────────────────────────────────────────
+
+# NOTE: POST /api/ci-results is NOT protected — GitHub Actions / validator
+#       needs to send data without a browser session.
+#       GET routes for the dashboard ARE protected.
+
 @app.route("/api/ci-results", methods=["GET"])
+@login_required
 def get_ci_results():
     conn = get_db()
     cur = conn.cursor()
@@ -380,11 +400,12 @@ def add_ci_result():
 
 @app.route("/health")
 def health():
-    return {"status": "BLV CI Dashboard API running", "version": "2.0"}
+    return {"status": "BLV CI Dashboard API running", "version": "2.1", "auth_enabled": AUTH_ENABLED}
 
 
 @app.route("/")
 @app.route("/dashboard")
+@login_required
 def dashboard():
     conn = get_db()
     cur = conn.cursor()
@@ -403,16 +424,25 @@ def dashboard():
     rules_idx = load_rules_index()
     gate_config = load_quality_gate_config()
 
+    # Pass auth info to template for the logout button
+    auth_info = {
+        "enabled": AUTH_ENABLED,
+        "username": session.get("github_user", ""),
+        "avatar": session.get("github_avatar", ""),
+    }
+
     return render_template("dashboard.html",
         results=results,
         rules_index=rules_idx,
-        gate_config=gate_config)
+        gate_config=gate_config,
+        auth_info=auth_info)
 
 
 # -----------------------------
 # Comparison API
 # -----------------------------
 @app.route("/api/compare/<run_id>", methods=["GET"])
+@login_required
 def compare_scan(run_id):
     """Compare a scan with its previous scan."""
     current = fetch_run_by_run_id(run_id)
@@ -433,6 +463,7 @@ def compare_scan(run_id):
 # Score History API
 # -----------------------------
 @app.route("/api/stats/score-history", methods=["GET"])
+@login_required
 def stats_score_history():
     conn = get_db()
     cur = conn.cursor()
@@ -460,6 +491,7 @@ def stats_score_history():
 # Reports
 # -----------------------------
 @app.route("/report/<run_id>.json", methods=["GET"])
+@login_required
 def download_report_json(run_id):
     row = fetch_run_by_run_id(run_id)
     if not row:
@@ -497,6 +529,7 @@ def download_report_json(run_id):
 
 
 @app.route("/report/<run_id>.pdf", methods=["GET"])
+@login_required
 def download_report_pdf(run_id):
     row = fetch_run_by_run_id(run_id)
     if not row:
@@ -857,6 +890,7 @@ def download_report_pdf(run_id):
 # Chart stats
 # -----------------------------
 @app.route("/api/stats/daily", methods=["GET"])
+@login_required
 def stats_daily():
     conn = get_db()
     cur = conn.cursor()
@@ -884,6 +918,7 @@ def stats_daily():
 
 
 @app.route("/api/stats/severity", methods=["GET"])
+@login_required
 def stats_severity():
     try:
         sev_map = load_rule_severity_map()
@@ -925,6 +960,7 @@ def stats_severity():
 
 
 @app.route("/api/stats/rule-frequency", methods=["GET"])
+@login_required
 def stats_rule_frequency():
     """Returns how many times each rule ID has failed across all scans."""
     try:
@@ -970,5 +1006,8 @@ def stats_rule_frequency():
 # -----------------------------
 if __name__ == "__main__":
     init_db()
+    print(f"[BLV Dashboard] Auth enabled: {AUTH_ENABLED}")
+    if AUTH_ENABLED:
+        print(f"[BLV Dashboard] Allowed user: {os.environ.get('GITHUB_ALLOWED_USER', 'NOT SET')}")
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=not bool(DATABASE_URL))
