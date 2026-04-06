@@ -52,6 +52,14 @@
         .nav-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
+        /* Auth user pill in navbar */
+        .nav-user { display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.2); border-radius: 20px; text-decoration: none; font-size: 12px; color: var(--text-secondary); transition: all 0.2s; }
+        .nav-user:hover { background: rgba(56,189,248,0.15); border-color: rgba(56,189,248,0.4); color: var(--text-primary); }
+        .nav-user img { width: 24px; height: 24px; border-radius: 50%; }
+        .nav-user .nav-user-name { font-weight: 600; }
+        .nav-user .nav-user-logout { color: var(--text-muted); margin-left: 4px; font-size: 11px; }
+        .nav-user .nav-user-logout:hover { color: #ef4444; }
+
         .theme-toggle { width: 42px; height: 24px; border-radius: 12px; background: var(--toggle-bg); border: none; cursor: pointer; position: relative; transition: background 0.3s; }
         .theme-toggle .toggle-knob { width: 18px; height: 18px; border-radius: 50%; background: white; position: absolute; top: 3px; transition: left 0.3s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
         [data-theme="dark"] .toggle-knob { left: 3px; }
@@ -132,7 +140,18 @@
 <div class="nav">
     <div class="nav-brand"><div class="nav-logo">BLV</div><span>BLV</span> Security Dashboard</div>
     <div class="nav-right">
-        <div class="nav-meta"><div class="nav-dot"></div> v2.0 &middot; Business Logic Vulnerability Monitor</div>
+        <div class="nav-meta"><div class="nav-dot"></div> v2.1 &middot; Business Logic Vulnerability Monitor</div>
+
+        {% if auth_info and auth_info.enabled and auth_info.username %}
+        <a href="/auth/logout" class="nav-user" title="Logout">
+            {% if auth_info.avatar %}
+            <img src="{{ auth_info.avatar }}" alt="avatar">
+            {% endif %}
+            <span class="nav-user-name">{{ auth_info.username }}</span>
+            <span class="nav-user-logout">Logout</span>
+        </a>
+        {% endif %}
+
         <span class="theme-label" id="themeLabel">Dark</span>
         <button class="theme-toggle" id="themeToggle" title="Toggle theme"><div class="toggle-knob"></div></button>
     </div>
@@ -210,7 +229,7 @@
         </tbody>
     </table>
 
-    <footer>BLV Automation Framework v2.0 &middot; Business Logic Security Monitoring</footer>
+    <footer>BLV Automation Framework v2.1 &middot; Business Logic Security Monitoring</footer>
 </div>
 
 <script>
