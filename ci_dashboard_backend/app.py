@@ -5,6 +5,7 @@ import secrets
 import sqlite3
 
 from flask import Flask, request, jsonify, render_template, send_file, session
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -29,6 +30,9 @@ if DATABASE_URL:
     import psycopg2
 
 app = Flask(__name__, template_folder=os.path.join(BASE_DIR, "templates"))
+
+# ─── Proxy fix (Railway terminates SSL, so Flask needs to trust proxy headers) ─
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
 
 # ─── Session config (required for OAuth) ─────────────────────────────────────
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", secrets.token_hex(32))
