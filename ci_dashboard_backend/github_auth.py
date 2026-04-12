@@ -62,7 +62,7 @@ def register_auth_routes(app):
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>BLV Dashboard — Login</title>
+            <title>BLV Dashboard: Login</title>
             <style>
                 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
                 body {{
@@ -75,7 +75,7 @@ def register_auth_routes(app):
                     color: #e2e8f0;
                 }}
                 .login-card {{
-                    background: #1A2421;
+                    background: #06402B;
                     border: 1px solid #334155;
                     border-radius: 16px;
                     padding: 48px 40px;
