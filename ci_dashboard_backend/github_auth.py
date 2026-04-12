@@ -70,13 +70,13 @@ def register_auth_routes(app):
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    background: #0F172A;
+                    background: #020617;
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                     color: #e2e8f0;
                 }}
                 .login-card {{
-                    background: #14532D;
-                    border: 1px solid #1E293B;
+                    background: #052E16;
+                    border: 1px solid #14532D;
                     border-radius: 16px;
                     padding: 48px 40px;
                     text-align: center;
