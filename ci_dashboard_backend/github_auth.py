@@ -70,13 +70,13 @@ def register_auth_routes(app):
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    background: #06402B;
+                    background: #0F172A;
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                     color: #e2e8f0;
                 }}
                 .login-card {{
-                    background: #0B6623;
-                    border: 1px solid #334155;
+                    background: #14532D;
+                    border: 1px solid #1E293B;
                     border-radius: 16px;
                     padding: 48px 40px;
                     text-align: center;
@@ -85,9 +85,9 @@ def register_auth_routes(app):
                     box-shadow: 0 25px 50px rgba(0,0,0,0.4);
                 }}
                 .shield-icon {{ font-size: 48px; margin-bottom: 16px; }}
-                h1 {{ font-size: 24px; font-weight: 700; margin-bottom: 8px; color: #f8fafc; }}
+                h1 {{ font-size: 24px; font-weight: 700; margin-bottom: 8px; color: #F8FAFC; }}
                 .subtitle {{
-                    font-size: 14px; color: #94a3b8;
+                    font-size: 14px; color: #94A3B8;
                     margin-bottom: 32px; line-height: 1.5;
                 }}
                 .github-btn {{
