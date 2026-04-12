@@ -70,7 +70,7 @@ def register_auth_routes(app):
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    background: #030b07;
+                    background: #092215;
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                     color: #e2e8f0;
                 }}
