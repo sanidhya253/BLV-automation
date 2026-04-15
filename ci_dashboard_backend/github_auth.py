@@ -62,7 +62,7 @@ def register_auth_routes(app):
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>BLV Dashboard — Login</title>
+            <title>BLV Dashboard: Login</title>
             <style>
                 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
                 body {{
@@ -70,13 +70,13 @@ def register_auth_routes(app):
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    background: #0f172a;
+                    background: #092215;
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                     color: #e2e8f0;
                 }}
                 .login-card {{
-                    background: #1e293b;
-                    border: 1px solid #334155;
+                    background: #052E16;
+                    border: 1px solid #14532D;
                     border-radius: 16px;
                     padding: 48px 40px;
                     text-align: center;
@@ -85,9 +85,9 @@ def register_auth_routes(app):
                     box-shadow: 0 25px 50px rgba(0,0,0,0.4);
                 }}
                 .shield-icon {{ font-size: 48px; margin-bottom: 16px; }}
-                h1 {{ font-size: 24px; font-weight: 700; margin-bottom: 8px; color: #f8fafc; }}
+                h1 {{ font-size: 24px; font-weight: 700; margin-bottom: 8px; color: #F8FAFC; }}
                 .subtitle {{
-                    font-size: 14px; color: #94a3b8;
+                    font-size: 14px; color: #94A3B8;
                     margin-bottom: 32px; line-height: 1.5;
                 }}
                 .github-btn {{

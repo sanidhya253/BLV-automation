@@ -8,53 +8,55 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
         [data-theme="dark"] {
-            --bg-body: #0f172a; --bg-nav: #1e293b; --bg-card: #1e293b;
-            --bg-table-head: #0f172a; --bg-hover: #263147; --border: #334155;
-            --text-primary: #e2e8f0; --text-secondary: #94a3b8; --text-muted: #64748b;
-            --text-heading: #cbd5e1;
+            --bg-body: #0a1a0f; --bg-nav: #0f2518; --bg-card: #0f2518;
+            --bg-table-head: #0a1a0f; --bg-hover: #163320; --border: #1e3a28;
+            --text-primary: #d4e8da; --text-secondary: #8aaa96; --text-muted: #5c7d68;
+            --text-heading: #b0ccb9;
             --badge-pass-bg: rgba(16,185,129,0.15); --badge-pass-text: #22c55e;
             --badge-fail-bg: rgba(239,68,68,0.15); --badge-fail-text: #ef4444;
             --gate-pass-bg: rgba(16,185,129,0.08); --gate-pass-border: rgba(16,185,129,0.3);
             --gate-fail-bg: rgba(239,68,68,0.08); --gate-fail-border: rgba(239,68,68,0.3);
             --gate-none-bg: rgba(100,116,139,0.08); --gate-none-border: rgba(100,116,139,0.3);
-            --link-color: #94a3b8; --link-hover-bg: #334155; --link-hover-text: #e2e8f0;
-            --chart-grid: #334155; --chart-tick: #94a3b8; --chart-label: #cbd5e1;
-            --radar-grid: rgba(148,163,184,0.35); --radar-angle: rgba(148,163,184,0.25);
-            --radar-label: #e2e8f0;
-            --footer-color: #475569; --toggle-bg: #334155;
+            --link-color: #8aaa96; --link-hover-bg: #1e3a28; --link-hover-text: #d4e8da;
+            --chart-grid: #1e3a28; --chart-tick: #8aaa96; --chart-label: #b0ccb9;
+            --radar-grid: rgba(138,170,150,0.35); --radar-angle: rgba(138,170,150,0.25);
+            --radar-label: #d4e8da;
+            --footer-color: #3d5c48; --toggle-bg: #1e3a28;
+            --accent: #34d399; --accent-dim: rgba(52,211,153,0.08); --accent-border: rgba(52,211,153,0.2);
         }
 
         [data-theme="light"] {
-            --bg-body: #f1f5f9; --bg-nav: #ffffff; --bg-card: #ffffff;
-            --bg-table-head: #f1f5f9; --bg-hover: #f1f5f9; --border: #e2e8f0;
-            --text-primary: #1e293b; --text-secondary: #64748b; --text-muted: #94a3b8;
-            --text-heading: #334155;
+            --bg-body: #f0f7f2; --bg-nav: #ffffff; --bg-card: #ffffff;
+            --bg-table-head: #f0f7f2; --bg-hover: #e8f3eb; --border: #d0e2d6;
+            --text-primary: #1a2e22; --text-secondary: #4a6b55; --text-muted: #7a9986;
+            --text-heading: #2d4a38;
             --badge-pass-bg: rgba(16,185,129,0.1); --badge-pass-text: #059669;
             --badge-fail-bg: rgba(239,68,68,0.1); --badge-fail-text: #dc2626;
             --gate-pass-bg: rgba(16,185,129,0.06); --gate-pass-border: rgba(16,185,129,0.25);
             --gate-fail-bg: rgba(239,68,68,0.06); --gate-fail-border: rgba(239,68,68,0.25);
             --gate-none-bg: rgba(100,116,139,0.06); --gate-none-border: rgba(100,116,139,0.25);
-            --link-color: #64748b; --link-hover-bg: #e2e8f0; --link-hover-text: #1e293b;
-            --chart-grid: #cbd5e1; --chart-tick: #64748b; --chart-label: #475569;
-            --radar-grid: rgba(71,85,105,0.3); --radar-angle: rgba(71,85,105,0.2);
-            --radar-label: #1e293b;
-            --footer-color: #94a3b8; --toggle-bg: #e2e8f0;
+            --link-color: #4a6b55; --link-hover-bg: #d0e2d6; --link-hover-text: #1a2e22;
+            --chart-grid: #c0d8ca; --chart-tick: #4a6b55; --chart-label: #3a5a45;
+            --radar-grid: rgba(58,90,69,0.3); --radar-angle: rgba(58,90,69,0.2);
+            --radar-label: #1a2e22;
+            --footer-color: #7a9986; --toggle-bg: #d0e2d6;
+            --accent: #059669; --accent-dim: rgba(5,150,105,0.06); --accent-border: rgba(5,150,105,0.2);
         }
 
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg-body); color: var(--text-primary); min-height: 100vh; transition: background 0.3s, color 0.3s; }
 
         .nav { background: var(--bg-nav); border-bottom: 1px solid var(--border); padding: 0 28px; height: 52px; display: flex; align-items: center; justify-content: space-between; transition: background 0.3s; }
         .nav-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 15px; }
-        .nav-logo { width: 28px; height: 28px; background: linear-gradient(135deg, #3b82f6, #06b6d4); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: white; }
-        .nav-brand span { color: #38bdf8; }
+        .nav-logo { width: 28px; height: 28px; background: linear-gradient(135deg, #22c55e, #34d399); border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; color: white; }
+        .nav-brand span { color: #34d399; }
         .nav-right { display: flex; align-items: center; gap: 16px; }
         .nav-meta { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
         .nav-dot { width: 7px; height: 7px; border-radius: 50%; background: #22c55e; animation: pulse 2s infinite; }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
 
         /* Auth user pill in navbar */
-        .nav-user { display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.2); border-radius: 20px; text-decoration: none; font-size: 12px; color: var(--text-secondary); transition: all 0.2s; }
-        .nav-user:hover { background: rgba(56,189,248,0.15); border-color: rgba(56,189,248,0.4); color: var(--text-primary); }
+        .nav-user { display: flex; align-items: center; gap: 8px; padding: 4px 12px 4px 4px; background: var(--accent-dim); border: 1px solid var(--accent-border); border-radius: 20px; text-decoration: none; font-size: 12px; color: var(--text-secondary); transition: all 0.2s; }
+        .nav-user:hover { background: rgba(52,211,153,0.15); border-color: rgba(52,211,153,0.4); color: var(--text-primary); }
         .nav-user img { width: 24px; height: 24px; border-radius: 50%; }
         .nav-user .nav-user-name { font-weight: 600; }
         .nav-user .nav-user-logout { color: var(--text-muted); margin-left: 4px; font-size: 11px; }
@@ -86,7 +88,7 @@
         .metric-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 18px; text-align: center; transition: background 0.3s; }
         .metric-value { font-size: 28px; font-weight: 800; }
         .metric-label { font-size: 11px; color: var(--text-secondary); margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .metric-value.score { color: #38bdf8; }
+        .metric-value.score { color: #34d399; }
         .metric-value.pass { color: #22c55e; }
         .metric-value.fail { color: #ef4444; }
 
@@ -252,13 +254,13 @@
     function getColors() {
         const dark = html.getAttribute('data-theme') === 'dark';
         return {
-            grid:       dark ? '#334155' : '#cbd5e1',
-            tick:       dark ? '#94a3b8' : '#64748b',
-            legend:     dark ? '#cbd5e1' : '#475569',
-            radarGrid:  dark ? 'rgba(148,163,184,0.35)' : 'rgba(71,85,105,0.3)',
-            radarAngle: dark ? 'rgba(148,163,184,0.25)' : 'rgba(71,85,105,0.2)',
-            radarLabel: dark ? '#e2e8f0' : '#1e293b',
-            radarTick:  dark ? '#94a3b8' : '#64748b',
+            grid:       dark ? '#1e3a28' : '#c0d8ca',
+            tick:       dark ? '#8aaa96' : '#4a6b55',
+            legend:     dark ? '#b0ccb9' : '#3a5a45',
+            radarGrid:  dark ? 'rgba(138,170,150,0.35)' : 'rgba(58,90,69,0.3)',
+            radarAngle: dark ? 'rgba(138,170,150,0.25)' : 'rgba(58,90,69,0.2)',
+            radarLabel: dark ? '#d4e8da' : '#1a2e22',
+            radarTick:  dark ? '#8aaa96' : '#4a6b55',
         };
     }
 
@@ -323,7 +325,7 @@
             const data = await res.json();
 
             const sevColors = { CRITICAL: '#dc2626', HIGH: '#f97316', MEDIUM: '#eab308', LOW: '#22c55e' };
-            const pointColors = data.map(x => sevColors[x.severity] || '#94a3b8');
+            const pointColors = data.map(x => sevColors[x.severity] || '#8aaa96');
 
             chartRadar = new Chart(document.getElementById('radarChart').getContext('2d'), {
                 type: 'radar',
@@ -348,10 +350,10 @@
                     plugins: {
                         legend: { display: false },
                         tooltip: {
-                            backgroundColor: 'rgba(15,23,42,0.95)',
-                            titleColor: '#e2e8f0',
-                            bodyColor: '#cbd5e1',
-                            borderColor: '#334155',
+                            backgroundColor: 'rgba(10,26,15,0.95)',
+                            titleColor: '#d4e8da',
+                            bodyColor: '#b0ccb9',
+                            borderColor: '#1e3a28',
                             borderWidth: 1,
                             padding: 10,
                             callbacks: {
@@ -413,8 +415,8 @@
                         label: 'Score',
                         data: data.map(x => x.score),
                         tension: 0.3,
-                        borderColor: '#38bdf8',
-                        backgroundColor: 'rgba(56,189,248,0.1)',
+                        borderColor: '#34d399',
+                        backgroundColor: 'rgba(52,211,153,0.1)',
                         fill: true,
                         pointBackgroundColor: data.map(x => x.score >= 60 ? '#22c55e' : '#ef4444'),
                         pointRadius: 5
