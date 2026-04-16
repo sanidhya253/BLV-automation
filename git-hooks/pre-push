@@ -68,15 +68,22 @@ echo ""
 sudo docker-compose down > /dev/null 2>&1
 
 # Step 4: Decision
-if [ $DAST_RESULT -ne 0 ]; then
+if [ $SAST_RESULT -ne 0 ] || [ $DAST_RESULT -ne 0 ]; then
     echo "============================================================"
     echo "  PUSH BLOCKED"
     echo "  Quality Gate FAILED — fix vulnerabilities before pushing"
     echo "============================================================"
     echo ""
-    echo "  Failed rules:"
-    echo "$DAST_OUTPUT" | grep -E "\[FAIL\]"
-    echo ""
+    if [ $SAST_RESULT -ne 0 ]; then
+        echo "  SAST failures (source code):"
+        cat /tmp/blv-sast-output.txt | grep -E "\[!!|\[FAIL\]|\[BLOCKED"
+        echo ""
+    fi
+    if [ $DAST_RESULT -ne 0 ]; then
+        echo "  DAST failures (runtime):"
+        echo "$DAST_OUTPUT" | grep -E "\[FAIL\]"
+        echo ""
+    fi
     echo "  Fix the issues and try again: git push"
     echo ""
     exit 1
