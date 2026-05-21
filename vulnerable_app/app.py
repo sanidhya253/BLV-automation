@@ -127,9 +127,4 @@ def reset():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-<<<<<<< HEAD
-#patch
-=======
-#sample
-
->>>>>>> 6eeebc7c23045f22de6953748f02884071916e1b
+#patched
